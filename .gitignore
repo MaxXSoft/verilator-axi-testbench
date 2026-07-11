@@ -1,0 +1,25 @@
+# CMake build trees and in-source artifacts
+/build/
+/cmake-build-*/
+/out/
+/CMakeCache.txt
+/CMakeFiles/
+/CTestTestfile.cmake
+/Testing/
+/cmake_install.cmake
+/Makefile
+/compile_commands.json
+
+# Local-only CMake settings
+/CMakeUserPresets.json
+
+# Verilator and waveform output accidentally emitted outside a build tree
+/obj_dir/
+*.vcd
+*.fst
+*.dSYM/
+
+# Editor and operating-system metadata
+.DS_Store
+*~
+*.swp

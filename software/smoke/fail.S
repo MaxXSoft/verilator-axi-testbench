@@ -1,0 +1,6 @@
+#include "riscv_test.h"
+
+RVTEST_CODE_BEGIN
+  li TESTNUM, 7
+  RVTEST_FAIL
+RVTEST_CODE_END

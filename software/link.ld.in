@@ -1,0 +1,58 @@
+OUTPUT_ARCH(riscv)
+ENTRY(_start)
+
+MEMORY
+{
+  ROM (rx)  : ORIGIN = @AXI_TB_SW_ROM_BASE@, LENGTH = @AXI_TB_SW_ROM_SIZE@
+  RAM (rwx) : ORIGIN = @AXI_TB_SW_RAM_BASE@, LENGTH = @AXI_TB_SW_RAM_SIZE@
+}
+
+SECTIONS
+{
+  .text @AXI_TB_SW_RESET_PC@ :
+  {
+    KEEP(*(.text.init))
+    *(.text .text.*)
+  } > ROM
+
+  .rodata :
+  {
+    *(.rodata .rodata.*)
+  } > ROM
+
+  /* Keep VMA and ELF physical load address in RAM.  The host ELF loader
+     initializes this segment directly, so no reset-time copy is needed. */
+  .data :
+  {
+    . = ALIGN(16);
+    __data_start = .;
+    *(.data .data.*)
+    __data_end = .;
+  } > RAM
+
+  .bss (NOLOAD) :
+  {
+    . = ALIGN(16);
+    __bss_start = .;
+    *(.bss .bss.* COMMON)
+    __bss_end = .;
+  } > RAM
+
+  . = ALIGN(16);
+  __heap_start = .;
+  __stack_top = ORIGIN(RAM) + LENGTH(RAM);
+
+  /DISCARD/ :
+  {
+    *(.comment)
+    *(.note .note.*)
+  }
+}
+
+ASSERT(@AXI_TB_SW_RESET_PC@ >= ORIGIN(ROM),
+       "reset PC is below the ROM window")
+ASSERT(@AXI_TB_SW_RESET_PC@ < ORIGIN(ROM) + LENGTH(ROM),
+       "reset PC is outside the ROM window")
+
+PROVIDE(__axi_tb_uart_base = @AXI_TB_SW_UART_BASE@);
+PROVIDE(__axi_tb_exit_base = @AXI_TB_SW_EXIT_BASE@);

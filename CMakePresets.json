@@ -1,0 +1,119 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Development",
+      "description": "C++20 development build with the self-contained tests enabled",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AXI_TB_BUILD_TESTS": "ON",
+        "AXI_TB_ENABLE_TRACE": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "AXI_TB_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "trace",
+      "displayName": "Development with VCD tracing",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/trace",
+      "cacheVariables": {
+        "AXI_TB_ENABLE_TRACE": "ON"
+      }
+    },
+    {
+      "name": "fuxi",
+      "displayName": "Fuxi plus RV32 I/M/A",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/fuxi",
+      "cacheVariables": {
+        "AXI_TB_BUILD_FUXI": "ON",
+        "AXI_TB_FUXI_WITH_RISCV_TESTS": "ON",
+        "AXI_TB_FUXI_SOURCE_DIR": "${sourceDir}/../Fuxi",
+        "AXI_TB_RISCV_TESTS_SOURCE_DIR": "${sourceDir}/../riscv-tests"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "trace",
+      "configurePreset": "trace"
+    },
+    {
+      "name": "fuxi",
+      "configurePreset": "fuxi",
+      "jobs": 2
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "core",
+      "configurePreset": "default",
+      "filter": {
+        "include": {
+          "label": "core"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "protocol",
+      "configurePreset": "default",
+      "filter": {
+        "include": {
+          "label": "protocol"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "fuxi",
+      "configurePreset": "fuxi",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+#ifndef AXI_TB_ENV_H
+#define AXI_TB_ENV_H
+
+/* Generated from the same values as config.hpp and link.ld. */
+#define AXI_TB_NUM_PORTS @AXI_TB_NUM_AXI@
+#define AXI_TB_ADDRESS_BITS @AXI_TB_ADDR_WIDTH@
+#define AXI_TB_DATA_BITS @AXI_TB_DATA_WIDTH@
+#define AXI_TB_ID_BITS @AXI_TB_ID_WIDTH@
+
+#define AXI_TB_ROM_BASE @AXI_TB_ROM_BASE@
+#define AXI_TB_ROM_SIZE @AXI_TB_ROM_SIZE@
+#define AXI_TB_RAM_BASE @AXI_TB_RAM_BASE@
+#define AXI_TB_RAM_SIZE @AXI_TB_RAM_SIZE@
+#define AXI_TB_UART_BASE @AXI_TB_UART_BASE@
+#define AXI_TB_UART_SIZE @AXI_TB_UART_SIZE@
+#define AXI_TB_EXIT_BASE @AXI_TB_EXIT_BASE@
+#define AXI_TB_EXIT_SIZE @AXI_TB_EXIT_SIZE@
+
+#define AXI_TB_TRACE_ENABLED @AXI_TB_TRACE_ENABLED@
+
+#endif /* AXI_TB_ENV_H */

@@ -1,0 +1,46 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+#define AXI_TB_NUM_PORTS @AXI_TB_NUM_AXI@
+#define AXI_TB_ADDRESS_BITS @AXI_TB_ADDR_WIDTH@
+#define AXI_TB_DATA_BITS @AXI_TB_DATA_WIDTH@
+#define AXI_TB_ID_BITS @AXI_TB_ID_WIDTH@
+
+#define AXI_TB_ROM_BASE UINT64_C(@AXI_TB_ROM_BASE@)
+#define AXI_TB_ROM_SIZE UINT64_C(@AXI_TB_ROM_SIZE@)
+#define AXI_TB_RAM_BASE UINT64_C(@AXI_TB_RAM_BASE@)
+#define AXI_TB_RAM_SIZE UINT64_C(@AXI_TB_RAM_SIZE@)
+#define AXI_TB_UART_BASE UINT64_C(@AXI_TB_UART_BASE@)
+#define AXI_TB_UART_SIZE UINT64_C(@AXI_TB_UART_SIZE@)
+#define AXI_TB_EXIT_BASE UINT64_C(@AXI_TB_EXIT_BASE@)
+#define AXI_TB_EXIT_SIZE UINT64_C(@AXI_TB_EXIT_SIZE@)
+
+#define AXI_TB_TRACE_ENABLED @AXI_TB_TRACE_ENABLED@
+
+namespace axi_tb::config {
+
+inline constexpr std::size_t num_ports = AXI_TB_NUM_PORTS;
+inline constexpr std::size_t address_bits = AXI_TB_ADDRESS_BITS;
+inline constexpr std::size_t data_bits = AXI_TB_DATA_BITS;
+inline constexpr std::size_t data_bytes = data_bits / 8U;
+inline constexpr std::size_t id_bits = AXI_TB_ID_BITS;
+
+inline constexpr std::uint64_t rom_base = AXI_TB_ROM_BASE;
+inline constexpr std::uint64_t rom_size = AXI_TB_ROM_SIZE;
+inline constexpr std::uint64_t ram_base = AXI_TB_RAM_BASE;
+inline constexpr std::uint64_t ram_size = AXI_TB_RAM_SIZE;
+inline constexpr std::uint64_t uart_base = AXI_TB_UART_BASE;
+inline constexpr std::uint64_t uart_size = AXI_TB_UART_SIZE;
+inline constexpr std::uint64_t exit_base = AXI_TB_EXIT_BASE;
+inline constexpr std::uint64_t exit_size = AXI_TB_EXIT_SIZE;
+
+inline constexpr bool trace_enabled = AXI_TB_TRACE_ENABLED != 0;
+
+static_assert(num_ports > 0);
+static_assert(address_bits == 32 || address_bits == 64);
+static_assert(data_bits == 32 || data_bits == 64 || data_bits == 128);
+static_assert(id_bits >= 1 && id_bits <= 32);
+
+}  // namespace axi_tb::config

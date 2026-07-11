@@ -1,0 +1,158 @@
+include(Fuxi)
+include(RiscvTests)
+
+option(AXI_TB_FUXI_WITH_RISCV_TESTS
+       "Build the locked 59-test upstream RV32 I/M/A manifest" ON)
+option(AXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY
+       "Enable the non-gating upstream ma_data capability test" OFF)
+
+# One source of truth for both the generated host configuration and all guest
+# linker scripts/headers.
+set(_fuxi_rom_base 0x00000000)
+set(_fuxi_rom_size 0x00010000)
+set(_fuxi_ram_base 0x80000000)
+set(_fuxi_ram_size 0x08000000)
+set(_fuxi_uart_base 0x10000000)
+set(_fuxi_uart_size 0x00000100)
+set(_fuxi_exit_base 0x10001000)
+set(_fuxi_exit_size 0x00000004)
+
+axi_tb_prepare_fuxi(
+  STAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/fuxi-stage"
+  OUTPUT_VAR _fuxi_rtl
+)
+
+add_axi_testbench(
+  TARGET fuxi_sim
+  TOP fuxi_axi_adapter
+  RTL_SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/fuxi_axi_adapter.sv"
+    ${_fuxi_rtl}
+  NUM_AXI 3
+  ADDR_WIDTH 32
+  DATA_WIDTH 32
+  ID_WIDTH 4
+  ROM_BASE ${_fuxi_rom_base}
+  ROM_SIZE ${_fuxi_rom_size}
+  RAM_BASE ${_fuxi_ram_base}
+  RAM_SIZE ${_fuxi_ram_size}
+  UART_BASE ${_fuxi_uart_base}
+  UART_SIZE ${_fuxi_uart_size}
+  EXIT_BASE ${_fuxi_exit_base}
+  EXIT_SIZE ${_fuxi_exit_size}
+  VERILATOR_ARGS
+    -Wno-DECLFILENAME
+    -Wno-UNUSEDSIGNAL
+    -Wno-VARHIDDEN
+)
+
+set(_riscv_tests_arguments)
+if(AXI_TB_FUXI_WITH_RISCV_TESTS)
+  list(APPEND _riscv_tests_arguments WITH_RISCV_TESTS)
+endif()
+axi_tb_add_riscv_software(
+  TARGET fuxi_software
+  OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/software"
+  ${_riscv_tests_arguments}
+  ROM_BASE ${_fuxi_rom_base}
+  ROM_SIZE ${_fuxi_rom_size}
+  RAM_BASE ${_fuxi_ram_base}
+  RAM_SIZE ${_fuxi_ram_size}
+  UART_BASE ${_fuxi_uart_base}
+  EXIT_BASE ${_fuxi_exit_base}
+  RESET_PC 0x00000200
+  OUT_PASS _fuxi_pass_elf
+  OUT_FAIL _fuxi_fail_elf
+  OUT_TIMEOUT _fuxi_timeout_elf
+  OUT_UART _fuxi_uart_elf
+  OUT_RISCV_NAMES _fuxi_riscv_names
+  OUT_RISCV_ELFS _fuxi_riscv_elfs
+  OUT_MA_DATA _fuxi_ma_data_elf
+)
+add_dependencies(fuxi_sim fuxi_software)
+
+if(BUILD_TESTING)
+  function(_fuxi_add_expected_test name elf expected_result max_cycles)
+    add_test(
+      NAME "${name}"
+      COMMAND "${CMAKE_COMMAND}"
+        "-DPROGRAM=$<TARGET_FILE:fuxi_sim>"
+        "-DELF=${elf}"
+        "-DEXPECTED_RESULT=${expected_result}"
+        "-DMAX_CYCLES=${max_cycles}"
+        -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
+    )
+  endfunction()
+
+  _fuxi_add_expected_test(fuxi_smoke_pass
+    "${_fuxi_pass_elf}" 0 1000000)
+  _fuxi_add_expected_test(fuxi_smoke_expected_fail
+    "${_fuxi_fail_elf}" 1 1000000)
+  _fuxi_add_expected_test(fuxi_smoke_timeout
+    "${_fuxi_timeout_elf}" 124 256)
+  add_test(
+    NAME fuxi_smoke_uart
+    COMMAND "${CMAKE_COMMAND}"
+      "-DPROGRAM=$<TARGET_FILE:fuxi_sim>"
+      "-DELF=${_fuxi_uart_elf}"
+      "-DUART_INPUT=${AXI_TB_ROOT_DIR}/software/smoke/uart.in"
+      -DEXPECTED_RESULT=0
+      -DMAX_CYCLES=1000000
+      "-DEXPECTED_OUTPUT=Fuxi"
+      -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
+  )
+  set_tests_properties(
+    fuxi_smoke_pass
+    fuxi_smoke_expected_fail
+    fuxi_smoke_timeout
+    fuxi_smoke_uart
+    PROPERTIES LABELS "fuxi;smoke" TIMEOUT 120
+  )
+
+  if(AXI_TB_FUXI_WITH_RISCV_TESTS)
+    list(LENGTH _fuxi_riscv_names _name_count)
+    list(LENGTH _fuxi_riscv_elfs _elf_count)
+    if(NOT _name_count EQUAL 59 OR NOT _elf_count EQUAL 59)
+      message(FATAL_ERROR
+        "Fuxi CTest registration requires exactly 59 default ISA guests")
+    endif()
+    math(EXPR _last_test "${_name_count} - 1")
+    foreach(_index RANGE 0 ${_last_test})
+      list(GET _fuxi_riscv_names ${_index} _name)
+      list(GET _fuxi_riscv_elfs ${_index} _elf)
+      set(_ctest_name "fuxi_riscv_${_name}")
+      _fuxi_add_expected_test("${_ctest_name}" "${_elf}" 0 10000000)
+      if(_name MATCHES "^rv32ui-")
+        set(_family rv32i)
+      elseif(_name MATCHES "^rv32um-")
+        set(_family rv32m)
+      else()
+        set(_family rv32a)
+      endif()
+      set(_labels "fuxi;riscv-tests;${_family}")
+      if(_name STREQUAL "rv32ui-fence_i")
+        list(APPEND _labels fence-i)
+      endif()
+      set_tests_properties("${_ctest_name}" PROPERTIES
+        LABELS "${_labels}"
+        TIMEOUT 300
+      )
+    endforeach()
+
+    _fuxi_add_expected_test(fuxi_capability_misaligned_ma_data
+      "${_fuxi_ma_data_elf}" 0 10000000)
+    set_tests_properties(fuxi_capability_misaligned_ma_data PROPERTIES
+      LABELS "fuxi;capability;misaligned"
+      TIMEOUT 300
+    )
+    if(AXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY)
+      set_tests_properties(fuxi_capability_misaligned_ma_data PROPERTIES
+        DISABLED FALSE)
+      add_dependencies(fuxi_sim
+        fuxi_software_capability_misaligned_ma_data)
+    else()
+      set_tests_properties(fuxi_capability_misaligned_ma_data PROPERTIES
+        DISABLED TRUE)
+    endif()
+  endif()
+endif()

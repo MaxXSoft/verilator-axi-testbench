@@ -1,0 +1,57 @@
+/* Generated alongside config.hpp. Keep all software-visible addresses here. */
+ENTRY(_start)
+
+PHDRS
+{
+  rom PT_LOAD FLAGS(5); /* R | X */
+  ram PT_LOAD FLAGS(6); /* R | W */
+}
+
+MEMORY
+{
+  ROM (rx)  : ORIGIN = @AXI_TB_ROM_BASE@, LENGTH = @AXI_TB_ROM_SIZE@
+  RAM (rwx) : ORIGIN = @AXI_TB_RAM_BASE@, LENGTH = @AXI_TB_RAM_SIZE@
+}
+
+SECTIONS
+{
+  .text :
+  {
+    KEEP(*(.text.init))
+    *(.text .text.*)
+  } > ROM :rom
+
+  .rodata :
+  {
+    *(.rodata .rodata.*)
+  } > ROM :rom
+
+  .data :
+  {
+    __data_start = .;
+    *(.data .data.*)
+    __data_end = .;
+  } > RAM :ram
+
+  .bss (NOLOAD) :
+  {
+    __bss_start = .;
+    *(.bss .bss.* COMMON)
+    __bss_end = .;
+  } > RAM :ram
+
+  . = ALIGN(16);
+  __heap_start = .;
+  __stack_top = ORIGIN(RAM) + LENGTH(RAM);
+
+  /DISCARD/ :
+  {
+    *(.comment)
+    *(.note .note.*)
+  }
+}
+
+PROVIDE(__axi_tb_uart_base = @AXI_TB_UART_BASE@);
+PROVIDE(__axi_tb_uart_size = @AXI_TB_UART_SIZE@);
+PROVIDE(__axi_tb_exit_base = @AXI_TB_EXIT_BASE@);
+PROVIDE(__axi_tb_exit_size = @AXI_TB_EXIT_SIZE@);

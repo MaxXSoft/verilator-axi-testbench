@@ -1,0 +1,173 @@
+include_guard(GLOBAL)
+
+include(CMakeParseArguments)
+
+set(AXI_TB_FUXI_SOURCE_DIR "" CACHE PATH
+    "Path to an existing Fuxi checkout (used only when integration is enabled)")
+set(AXI_TB_FUXI_JAVA_HOME "/opt/homebrew/opt/openjdk@11" CACHE PATH
+    "Java 11 home used to elaborate Fuxi")
+set(AXI_TB_FUXI_SBT_EXECUTABLE "" CACHE FILEPATH
+    "Path to sbt; leave empty to search PATH")
+
+# Stage exactly the source material needed by Fuxi's Chisel build and
+# elaborate Fuxi.v during CMake configuration.  add_axi_testbench() asks
+# Verilator to inspect all RTL at configure time, so deferring elaboration to a
+# build rule would be too late.
+function(axi_tb_prepare_fuxi)
+  set(_one_value SOURCE_DIR STAGE_DIR OUTPUT_VAR)
+  cmake_parse_arguments(PARSE_ARGV 0 FUXI "" "${_one_value}" "")
+
+  if(FUXI_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR
+      "axi_tb_prepare_fuxi(): unknown arguments: ${FUXI_UNPARSED_ARGUMENTS}")
+  endif()
+  if(NOT FUXI_OUTPUT_VAR)
+    message(FATAL_ERROR "axi_tb_prepare_fuxi(): OUTPUT_VAR is required")
+  endif()
+
+  if(FUXI_SOURCE_DIR)
+    set(_source_dir "${FUXI_SOURCE_DIR}")
+  else()
+    set(_source_dir "${AXI_TB_FUXI_SOURCE_DIR}")
+  endif()
+  if(NOT _source_dir OR NOT IS_DIRECTORY "${_source_dir}")
+    message(FATAL_ERROR
+      "Fuxi integration requires a checkout. Set AXI_TB_FUXI_SOURCE_DIR "
+      "or pass SOURCE_DIR to axi_tb_prepare_fuxi().")
+  endif()
+  file(REAL_PATH "${_source_dir}" _source_dir)
+
+  if(FUXI_STAGE_DIR)
+    get_filename_component(_stage_dir "${FUXI_STAGE_DIR}" ABSOLUTE
+      BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+  else()
+    set(_stage_dir "${CMAKE_CURRENT_BINARY_DIR}/fuxi-stage")
+  endif()
+  file(REAL_PATH "${CMAKE_BINARY_DIR}" _binary_dir)
+  cmake_path(IS_PREFIX _binary_dir "${_stage_dir}" NORMALIZE _stage_in_build)
+  if(NOT _stage_in_build)
+    message(FATAL_ERROR
+      "Fuxi staging directory must be below CMAKE_BINARY_DIR; got ${_stage_dir}")
+  endif()
+  if(_stage_dir STREQUAL _source_dir)
+    message(FATAL_ERROR "Fuxi staging directory must not be the source checkout")
+  endif()
+
+  set(_required_files
+    build.sbt
+    project/build.properties
+    project/plugins.sbt
+    verilog/FuxiWrapper.v
+  )
+  foreach(_relative IN LISTS _required_files)
+    if(NOT EXISTS "${_source_dir}/${_relative}")
+      message(FATAL_ERROR "Fuxi checkout is missing ${_relative}")
+    endif()
+  endforeach()
+  file(GLOB_RECURSE _scala_sources CONFIGURE_DEPENDS
+    RELATIVE "${_source_dir}"
+    "${_source_dir}/src/main/scala/*.scala"
+  )
+  if(NOT _scala_sources)
+    message(FATAL_ERROR "Fuxi checkout has no src/main/scala sources")
+  endif()
+
+  # Recreate the private stage so stale files can never become accidental
+  # elaboration inputs.  Nothing is written into the external checkout.
+  file(REMOVE_RECURSE "${_stage_dir}")
+  foreach(_relative IN LISTS _required_files _scala_sources)
+    get_filename_component(_destination_dir
+      "${_stage_dir}/${_relative}" DIRECTORY)
+    file(MAKE_DIRECTORY "${_destination_dir}")
+    configure_file("${_source_dir}/${_relative}"
+                   "${_stage_dir}/${_relative}" COPYONLY)
+  endforeach()
+
+  # Fuxi's AMO unit was written for the read-first behaviour of the FPGA
+  # block RAM used by the original SoC.  Chisel 3.2's SyncReadMem model is
+  # write-first under current Verilator, so io_ramRdata changes to the newly
+  # written value before the AMO reaches writeback.  Latch the architecturally
+  # required old value in the private build stage.  The exact-source checks
+  # deliberately fail on an unknown Fuxi revision instead of silently
+  # rewriting unrelated Scala; the external checkout is never touched.
+  set(_amo_source "${_stage_dir}/src/main/scala/lsu/AmoExecute.scala")
+  file(READ "${_amo_source}" _amo_text)
+  set(_amo_state_needle "  val state = RegInit(sIdle)\n")
+  set(_amo_writeback_needle "  io.regWdata := io.ramRdata\n")
+  string(FIND "${_amo_text}" "${_amo_state_needle}" _amo_state_position)
+  string(FIND "${_amo_text}" "${_amo_writeback_needle}"
+         _amo_writeback_position)
+  if(_amo_state_position EQUAL -1 OR _amo_writeback_position EQUAL -1)
+    message(FATAL_ERROR
+      "The selected Fuxi revision does not match the staged AMO compatibility "
+      "patch. Update cmake/Fuxi.cmake for this revision.")
+  endif()
+  string(REPLACE "${_amo_state_needle}"
+    "${_amo_state_needle}\n  // Preserve FPGA read-first BRAM semantics during simulation.\n  val originalData = RegInit(0.U(DATA_WIDTH.W))\n  when (io.flush) {\n    originalData := 0.U\n  } .elsewhen (state === sStore && io.ramValid) {\n    originalData := io.ramRdata\n  }\n"
+    _amo_text "${_amo_text}")
+  string(REPLACE "${_amo_writeback_needle}"
+    "  io.regWdata := originalData\n" _amo_text "${_amo_text}")
+  file(WRITE "${_amo_source}" "${_amo_text}")
+
+  set(_generated_dir "${_stage_dir}/verilog/build")
+  set(_tmp_dir "${_stage_dir}/tmp")
+  file(MAKE_DIRECTORY "${_generated_dir}" "${_tmp_dir}")
+
+  if(NOT IS_DIRECTORY "${AXI_TB_FUXI_JAVA_HOME}" OR
+     NOT EXISTS "${AXI_TB_FUXI_JAVA_HOME}/bin/java")
+    message(FATAL_ERROR
+      "Fuxi elaboration requires Java 11 at AXI_TB_FUXI_JAVA_HOME; got "
+      "'${AXI_TB_FUXI_JAVA_HOME}'")
+  endif()
+  execute_process(
+    COMMAND "${AXI_TB_FUXI_JAVA_HOME}/bin/java" -version
+    OUTPUT_VARIABLE _java_stdout
+    ERROR_VARIABLE _java_stderr
+    RESULT_VARIABLE _java_result
+  )
+  string(CONCAT _java_version_text "${_java_stdout}" "${_java_stderr}")
+  if(NOT _java_result EQUAL 0 OR
+     NOT _java_version_text MATCHES "version[ \t]+\"11\\.")
+    message(FATAL_ERROR
+      "AXI_TB_FUXI_JAVA_HOME must select Java 11; version output was:\n"
+      "${_java_version_text}")
+  endif()
+
+  if(AXI_TB_FUXI_SBT_EXECUTABLE)
+    set(_sbt "${AXI_TB_FUXI_SBT_EXECUTABLE}")
+  else()
+    find_program(_sbt NAMES sbt)
+  endif()
+  if(NOT _sbt OR NOT EXISTS "${_sbt}")
+    message(FATAL_ERROR
+      "Fuxi elaboration requires sbt 1.3.2; set "
+      "AXI_TB_FUXI_SBT_EXECUTABLE or add sbt to PATH")
+  endif()
+
+  set(_fuxi_v "${_generated_dir}/Fuxi.v")
+  execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env
+      "JAVA_HOME=${AXI_TB_FUXI_JAVA_HOME}"
+      "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=${_tmp_dir}"
+      "TMPDIR=${_tmp_dir}"
+      "PATH=${AXI_TB_FUXI_JAVA_HOME}/bin:$ENV{PATH}"
+      "${_sbt}"
+      -Dchisel3Version=3.2.8
+      -Dchisel-iotestersVersion=1.3.8
+      "runMain Fuxi --target-dir ${_generated_dir}"
+    WORKING_DIRECTORY "${_stage_dir}"
+    OUTPUT_VARIABLE _sbt_stdout
+    ERROR_VARIABLE _sbt_stderr
+    RESULT_VARIABLE _sbt_result
+  )
+  if(NOT _sbt_result EQUAL 0 OR NOT EXISTS "${_fuxi_v}")
+    message(FATAL_ERROR
+      "Fuxi elaboration failed (sbt result ${_sbt_result}).\n"
+      "stdout:\n${_sbt_stdout}\n"
+      "stderr:\n${_sbt_stderr}")
+  endif()
+
+  set(${FUXI_OUTPUT_VAR}
+      "${_fuxi_v};${_stage_dir}/verilog/FuxiWrapper.v"
+      PARENT_SCOPE)
+endfunction()
