@@ -4,9 +4,8 @@ This example is deliberately opt-in: it elaborates an external Fuxi checkout
 and can import an external riscv-tests checkout.  Enabling it never modifies
 either checkout.  Fuxi is copied into a private build-tree stage containing
 only `build.sbt`, the two `project` files, `src/main/scala/**`, and
-`verilog/FuxiWrapper.v`.  The stage also latches the pre-write AMO value to
-preserve the original FPGA read-first BRAM semantics under current Verilator;
-the compatibility rewrite is guarded by exact source-shape checks.
+`verilog/FuxiWrapper.v`.  The staged Fuxi sources are elaborated without
+modification.
 
 The integration expects:
 

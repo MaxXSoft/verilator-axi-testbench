@@ -225,11 +225,9 @@ ctest --preset fuxi
 - `AXI_TB_RISCV_LLD`
 
 配置阶段只把 Fuxi 所需文件复制到 build staging，并在 staging 中用 Java 11、
-Chisel 3.2.8 和 iotesters 1.3.8 生成 `Fuxi.v`；不会修改外部 checkout。staging
-还会锁存 AMO 的旧读值，以保持原 SoC 所依赖的 FPGA read-first BRAM 语义，避免
-当前 Verilator 对旧 `SyncReadMem` 模型呈现 write-first。补丁会检查预期源码形状，
-不匹配的 Fuxi revision 会在配置阶段明确失败。Fuxi 的三个端口固定映射为
-instruction/data/uncached，IRQ 绑 0，并断言遗留 AXI3 `WID` 始终为 0。
+Chisel 3.2.8 和 iotesters 1.3.8 生成 `Fuxi.v`；不会修改外部 checkout，也不会改写
+staging 中的 Fuxi 源码。Fuxi 的三个端口固定映射为 instruction/data/uncached，
+IRQ 绑 0，并断言遗留 AXI3 `WID` 始终为 0。
 
 可选测试包含 UART/Exit smoke 和直接从 upstream assembly 编译的 59 个
 RV32I/M/A guest。`ma_data` 作为单独的 misaligned-access capability 测试，默认

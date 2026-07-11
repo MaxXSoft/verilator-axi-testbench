@@ -83,32 +83,6 @@ function(axi_tb_prepare_fuxi)
                    "${_stage_dir}/${_relative}" COPYONLY)
   endforeach()
 
-  # Fuxi's AMO unit was written for the read-first behaviour of the FPGA
-  # block RAM used by the original SoC.  Chisel 3.2's SyncReadMem model is
-  # write-first under current Verilator, so io_ramRdata changes to the newly
-  # written value before the AMO reaches writeback.  Latch the architecturally
-  # required old value in the private build stage.  The exact-source checks
-  # deliberately fail on an unknown Fuxi revision instead of silently
-  # rewriting unrelated Scala; the external checkout is never touched.
-  set(_amo_source "${_stage_dir}/src/main/scala/lsu/AmoExecute.scala")
-  file(READ "${_amo_source}" _amo_text)
-  set(_amo_state_needle "  val state = RegInit(sIdle)\n")
-  set(_amo_writeback_needle "  io.regWdata := io.ramRdata\n")
-  string(FIND "${_amo_text}" "${_amo_state_needle}" _amo_state_position)
-  string(FIND "${_amo_text}" "${_amo_writeback_needle}"
-         _amo_writeback_position)
-  if(_amo_state_position EQUAL -1 OR _amo_writeback_position EQUAL -1)
-    message(FATAL_ERROR
-      "The selected Fuxi revision does not match the staged AMO compatibility "
-      "patch. Update cmake/Fuxi.cmake for this revision.")
-  endif()
-  string(REPLACE "${_amo_state_needle}"
-    "${_amo_state_needle}\n  // Preserve FPGA read-first BRAM semantics during simulation.\n  val originalData = RegInit(0.U(DATA_WIDTH.W))\n  when (io.flush) {\n    originalData := 0.U\n  } .elsewhen (state === sStore && io.ramValid) {\n    originalData := io.ramRdata\n  }\n"
-    _amo_text "${_amo_text}")
-  string(REPLACE "${_amo_writeback_needle}"
-    "  io.regWdata := originalData\n" _amo_text "${_amo_text}")
-  file(WRITE "${_amo_source}" "${_amo_text}")
-
   set(_generated_dir "${_stage_dir}/verilog/build")
   set(_tmp_dir "${_stage_dir}/tmp")
   file(MAKE_DIRECTORY "${_generated_dir}" "${_tmp_dir}")
