@@ -1,20 +1,24 @@
-# Verilator 通用 AXI4 Testbench
+# Reusable AXI4 Testbench for Verilator
 
-这是一个面向“AXI initiator DUT”的可复用仿真环境。DUT 和少量信号改名留在
-SystemVerilog；AXI fabric、协议检查、ROM/RAM/UART/Exit 设备、ELF 加载和仿真
-循环均使用 C++20 实现。构建系统要求 Verilator 5 或更新版本。
+This repository provides a reusable simulation environment for AXI initiator
+DUTs. DUT-specific integration and minimal signal renaming stay in
+SystemVerilog; the AXI fabric, protocol checks, ROM/RAM/UART/Exit devices, ELF
+loading, and simulation loop are implemented in C++20. The build requires
+Verilator 5 or newer.
 
-当前实现以 little-endian、单时钟域、各端口同宽为边界。支持 32/64-bit 地址、
-32/64/128-bit 数据、1--32-bit ID，以及 AXI4 AW/AR 的
-`ID/ADDR/LEN/SIZE/BURST/LOCK/CACHE/PROT` 和完整 W/R/B 通道。不包含 AXI3
-write-data interleaving、宽度转换、`USER/QOS/REGION`、ACE 或 AXI5 ATOP。
+The current implementation assumes little-endian operation, a single clock
+domain, and uniform address, data, and ID widths across all ports. It supports
+32- or 64-bit addresses, 32-, 64-, or 128-bit data, 1- to 32-bit IDs, the AXI4
+AW/AR `ID/ADDR/LEN/SIZE/BURST/LOCK/CACHE/PROT` fields, and complete W/R/B
+channels. It does not support AXI3 write-data interleaving, width conversion,
+`USER/QOS/REGION`, ACE, or AXI5 ATOP.
 
-## 架构
+## Architecture
 
 ```text
 initiator DUT
     │
-    ├─ thin SystemVerilog adapter（packed canonical ports）
+    ├─ thin SystemVerilog adapter (packed canonical ports)
     │
     └─ VerilatedAxiBinding
           │
@@ -27,31 +31,42 @@ initiator DUT
                 └─ 32-bit Exit register
 ```
 
-`AxiFabric` 的端口数和宽度都是编译期参数。每个入口分别缓冲五个通道，W 可以
-先于 AW 到达；多端口的 AW 和 AR 独立 round-robin 仲裁，内部路由同时保留端口号
-和 AXI ID。fabric 每周期至多处理一个 read beat 和一个 write beat，允许多个
-outstanding transaction，但不会主动乱序完成或交织两个 read burst 的数据。
+The port count and widths of `AxiFabric` are compile-time parameters.
+Each ingress buffers all five channels independently, so W may arrive before
+AW. AW and AR use independent round-robin arbitration across ports, while each
+internal route retains both the port number and AXI ID. The fabric processes at
+most one read beat and one write beat per cycle. It allows multiple outstanding
+transactions, but does not intentionally complete them out of order or
+interleave data from two read bursts.
 
-burst 地址计算覆盖 FIXED、INCR、WRAP、窄传输、非对齐首拍、WSTRB、WLAST、
-最多 256 beats 和 4 KiB 边界。违反 AXI 形状或 VALID 背压稳定性的事务会抛出
-带周期、端口、通道以及可用的 ID/地址信息的协议错误。write burst 会在完整
-校验 WLAST/WSTRB 后再提交，因此后拍错误或中途 reset 不会留下部分写入。未映射
-访问返回 DECERR；ROM 写和设备不支持的合法访问返回 SLVERR。RAM 支持以
-`{port,id}` 为键的 exclusive reservation。
+Burst address calculation supports FIXED, INCR, and WRAP bursts; narrow
+transfers; unaligned first beats; WSTRB; WLAST; up to 256 beats; and the 4 KiB
+boundary rule. Transactions that violate AXI shape rules or VALID stability
+under backpressure raise protocol errors with the cycle, port, channel, and
+available ID/address context. Device writes begin only after every beat has
+passed WLAST/WSTRB validation. Consequently, a late validation error or a
+reset before WLAST leaves no partial write behind. Unmapped accesses return
+DECERR; writes to ROM and unsupported but otherwise legal device accesses
+return SLVERR. RAM implements exclusive reservations keyed by `{port,id}`.
 
-ROM 在镜像加载后只读；RAM 在 macOS/Linux 优先使用 lazy anonymous mapping，
-其他平台回退到标准容器。所有 AXI 端口共享同一个 RAM 对象。UART 实现
-RBR/THR、LSR 的 DR/THRE/TEMT，以及常见的 DLAB、DLL/DLM、IER、LCR、MCR、
-SCR 初始化寄存器；它不模拟精确波特率、中断或完整 modem/FIFO 时序。reset
-清空 fabric、仲裁、响应和 exclusive 状态，但不清除 ROM/RAM 内容。
-每拍设备访问使用固定函数表而非 C++ virtual dispatch，UART RX 使用固定 16-byte
-ring；默认仿真热路径不分配内存。
+ROM becomes read-only after its image is loaded. RAM uses lazy anonymous
+mappings on macOS and Linux when available, with a standard container fallback
+elsewhere. Every AXI port shares the same RAM object. The UART implements
+RBR/THR, the LSR DR/THRE/TEMT bits, and the common DLAB, DLL/DLM, IER, LCR,
+MCR, and SCR initialization registers. It does not model exact baud timing,
+interrupts, or complete modem/FIFO behavior. Reset clears fabric, arbitration,
+response, and exclusive state without clearing ROM or RAM contents. Each
+per-beat device access uses a fixed function table instead of C++ virtual
+dispatch, and UART RX uses a fixed 16-byte ring; the default simulation hot
+path performs no memory allocation.
 
-## Canonical SystemVerilog adapter
+## Canonical SystemVerilog Adapter
 
-[`rtl/axi_tb_ports.svh`](rtl/axi_tb_ports.svh) 中的
-`AXI_TB_INITIATOR_PORTS` 是 C++ binding 依赖的稳定边界。adapter 顶层必须具有
-参数 `NUM_AXI`、`ADDR_WIDTH`、`DATA_WIDTH`、`ID_WIDTH`，并直接展开该宏：
+`AXI_TB_INITIATOR_PORTS` in
+[`rtl/axi_tb_ports.svh`](rtl/axi_tb_ports.svh) is the stable boundary
+consumed by the C++ binding. The adapter top level must declare the
+`NUM_AXI`, `ADDR_WIDTH`, `DATA_WIDTH`, and
+`ID_WIDTH` parameters and expand that macro directly:
 
 ```systemverilog
 `include "axi_tb_ports.svh"
@@ -64,29 +79,34 @@ module my_axi_adapter #(
 ) (
   `AXI_TB_INITIATOR_PORTS
 );
-  // 在这里实例化 DUT，并将它的 initiator 端口逐项连接到 axi_* packed arrays。
-  // axi_*[0] 是第 0 个入口，依此类推；clk 和低有效 aresetn 也来自该边界。
+  // Instantiate the DUT here and connect its initiator ports to the axi_*
+  // packed arrays. axi_*[0] is ingress 0, and so on. clk and active-low
+  // aresetn also come from this boundary.
 endmodule
 ```
 
-宏声明了 initiator 方向的所有 `axi_aw_*`、`axi_w_*`、`axi_b_*`、`axi_ar_*`、
-`axi_r_*` 信号。不要在 adapter 外再展平或重命名这些 Verilator-visible 信号。
-[`rtl/axi_tb_canonical_top.sv`](rtl/axi_tb_canonical_top.sv) 是保持空闲的最小结构
-示例；[`examples/fuxi/fuxi_axi_adapter.sv`](examples/fuxi/fuxi_axi_adapter.sv) 展示了
-三组具名接口到 canonical arrays 的实际映射。
+The macro declares every initiator-facing `axi_aw_*`,
+`axi_w_*`, `axi_b_*`, `axi_ar_*`, and
+`axi_r_*` signal. Do not flatten or rename these Verilator-visible
+signals outside the adapter.
+[`rtl/axi_tb_canonical_top.sv`](rtl/axi_tb_canonical_top.sv) is a
+minimal idle structural example, while
+[`examples/fuxi/fuxi_axi_adapter.sv`](examples/fuxi/fuxi_axi_adapter.sv)
+shows a real mapping from three named interfaces to the canonical arrays.
 
-## CMake 接入
+## CMake Integration
 
-最简单的接入方式是把本仓库作为子目录加入工程；它会创建 `axi_tb_core` 并载入
-`cmake/AxiTestbench.cmake`：
+The simplest integration is to add this repository as a subdirectory. This
+creates `axi_tb_core` and loads `cmake/AxiTestbench.cmake`:
 
 ```cmake
 set(AXI_TB_BUILD_TESTS OFF CACHE BOOL "")
 add_subdirectory(path/to/verilator-axi-testbench axi-testbench)
 ```
 
-随后可用 `add_axi_testbench()` 为每个 DUT 生成独立的配置、Verilated model 和
-仿真可执行文件。下面列出全部常用配置项：
+Then use `add_axi_testbench()` to generate a separate configuration,
+Verilated model, and simulator executable for each DUT. The commonly used
+options are shown below:
 
 ```cmake
 add_axi_testbench(
@@ -110,65 +130,74 @@ add_axi_testbench(
   EXIT_BASE    0x10001000
   EXIT_SIZE    0x00000004
 
-  # 可选：仅对这个目标编译 VCD tracing。
+  # Optional: compile VCD tracing for this target only.
   TRACE
-  # 可选的多值参数：
+  # Optional multi-value arguments:
   # CXX_SOURCES     ${CMAKE_CURRENT_SOURCE_DIR}/extra_support.cpp
   # INCLUDE_DIRS    ${CMAKE_CURRENT_SOURCE_DIR}/rtl/include
   # VERILATOR_ARGS  --timescale 1ns/1ps
 )
 ```
 
-`TARGET`、`TOP`、`RTL_SOURCES` 必填，其余值均有默认值。`EXIT_ADDRESS` 可作为
-`EXIT_BASE` 的别名。每次调用会在当前 binary directory 下生成：
+`TARGET`, `TOP`, and `RTL_SOURCES` are required; all
+other values have defaults. `EXIT_ADDRESS` is accepted as an alias for
+`EXIT_BASE`. Each call generates the following beneath the current
+binary directory:
 
-- `axi_tb_generated/<target>/config.hpp`：C++ 配置；
-- `axi_tb_generated/<target>/axi_tb_env.h`：guest 软件头；
-- `axi_tb_generated/<target>/link.ld`：使用同一 ROM/RAM 地址的 linker script；
-- `verilated/<target>/`：该目标独立的 Verilator 输出。
+- `axi_tb_generated/<target>/config.hpp`: C++ configuration.
+- `axi_tb_generated/<target>/axi_tb_env.h`: guest software header.
+- `axi_tb_generated/<target>/link.ld`: linker script using the same
+  ROM/RAM addresses.
+- `verilated/<target>/`: target-specific Verilator output.
 
-这些文件来自同一组 CMake 参数，guest 和 host 不需要各维护一份地址常量。
-配置阶段会以完整 `uint64_t` 范围检查每个窗口的溢出、32-bit 地址宽度上限和任意
-两个设备窗口的重叠；错误地址图不会进入 Verilation。
+All of these files come from one set of CMake parameters, so guest and host
+code do not need separate copies of the address constants. During
+configuration, every window is checked across the full `uint64_t` range
+for overflow, the 32-bit address-width limit, and overlap with every other
+device window. An invalid address map never reaches Verilation.
 
-### 默认地址图
+### Default Address Map
 
-| 设备 | Base | Size |
+| Device | Base | Size |
 |---|---:|---:|
-| ROM | `0x00000000` | `0x00010000`（64 KiB） |
-| RAM | `0x80000000` | `0x08000000`（128 MiB） |
+| ROM | `0x00000000` | `0x00010000` (64 KiB) |
+| RAM | `0x80000000` | `0x08000000` (128 MiB) |
 | UART | `0x10000000` | `0x00000100` |
 | Exit | `0x10001000` | `0x00000004` |
 
-Exit 只接受对齐、完整 strobe 的 32-bit 单拍写。guest 写 `0` 时 host 返回 0；
-写非零值时会完整打印 guest code，而 host 返回 1。
+Exit accepts only aligned, full-strobe, single-beat 32-bit writes. When the
+guest writes `0`, the host returns 0. For a nonzero value, the host
+prints the complete guest code and returns 1.
 
-## 仿真命令行
+## Simulator Command Line
 
 ```text
 my_core_sim [options]
 
-  --elf FILE                 加载 little-endian ELF32/ELF64 的 PT_LOAD
-  --rom-image FILE           将 raw image 加载到 ROM base
-  --ram-image FILE           将 raw image 加载到 RAM base
-  --max-cycles N             reset 后的最大 active cycles；默认 10000000
-  --reset-cycles N           reset rising edges；默认 5
-  --uart-in FILE|-           UART 输入；默认 stdin，- 也表示 stdin
-  --uart-out FILE|-          UART 输出；默认 stdout，- 也表示 stdout
-  --seed N                   fabric 随机 stall seed；默认 1
-  --stall-probability P      AW/W/AR READY stall 概率 [0,1]；默认 0
-  --trace FILE               写 VCD；目标必须以 TRACE 编译
-  +NAME[=VALUE]              原样传给 Verilated RTL 的 plusarg
+  --elf FILE                 Load PT_LOAD segments from a little-endian ELF32/ELF64
+  --rom-image FILE           Load a raw image at the ROM base
+  --ram-image FILE           Load a raw image at the RAM base
+  --max-cycles N             Maximum active cycles after reset; default 10000000
+  --reset-cycles N           Reset rising edges; default 5
+  --uart-in FILE|-           UART input; default stdin, and - also means stdin
+  --uart-out FILE|-          UART output; default stdout, and - also means stdout
+  --seed N                   Fabric random-stall seed; default 1
+  --stall-probability P      AW/W/AR READY stall probability in [0,1]; default 0
+  --trace FILE               Write VCD; tracing must have been compiled in
+  +NAME[=VALUE]              Pass a plusarg through to the Verilated RTL unchanged
 ```
 
-`--elf` 不能和 raw image 选项同时使用。ELF loader 先验证全部 PT_LOAD，再写入
-ROM/RAM，并将 `p_memsz - p_filesz` 区域清零。返回码为：guest PASS `0`、guest
-非零退出 `1`、配置或镜像错误 `2`、AXI 协议错误（或 DUT 提前 `$finish`）`3`、
-超时 `124`、SIGINT `130`。
+`--elf` cannot be combined with either raw-image option. The ELF loader
+validates every PT_LOAD segment before writing any data to ROM or RAM, then
+zeroes each `p_memsz - p_filesz` region. Exit statuses are: guest PASS
+`0`, nonzero guest exit `1`, configuration or image error
+`2`, AXI protocol error (or premature DUT `$finish`)
+`3`, timeout `124`, and SIGINT `130`.
 
-## 构建与测试
+## Building and Testing
 
-使用 preset 时需要 CMake 3.25 或更新版本、C++20 编译器和 Verilator 5+：
+Using the presets requires CMake 3.25 or newer, a C++20 compiler, and Verilator
+5 or newer:
 
 ```sh
 cmake --preset default
@@ -176,37 +205,40 @@ cmake --build --preset default -j
 ctest --preset default
 ```
 
-只运行自包含 core 或 protocol 分组：
+Run only the self-contained core or protocol groups with:
 
 ```sh
 ctest --preset core
 ctest --preset protocol
 ```
 
-固定 seed 的双端口 differential stress 在 100,000 个随机流量周期后 drain，覆盖
-不同 AxSIZE、INCR burst、非对齐首拍、partial WSTRB、AW/W 任意先后以及请求和
-响应背压，并逐字节比较 RAM golden model：
+The fixed-seed, dual-port differential stress test runs 100,000 cycles of
+random traffic and then drains the fabric. It covers different AxSIZE values,
+INCR bursts, unaligned first beats, partial WSTRB, either AW/W arrival order,
+and request/response backpressure, comparing RAM against a golden model byte
+by byte:
 
 ```sh
 cmake --build build/default --target axi_tb_host_fabric_stress -j
 ctest --test-dir build/default -R '^core\.host_fabric_stress$' --output-on-failure
 ```
 
-上述 preset、host test、Verilator 和 Fuxi staging 的产物都位于仓库内的
-`build/`；正常构建和测试不需要从 `/private/tmp` 运行可执行文件。
+Artifacts from these presets, host tests, Verilator, and Fuxi staging all
+remain under the repository's `build/` directory. Normal builds and
+tests do not need to run executables from `/private/tmp`.
 
-## 可选 Fuxi preset
+## Optional Fuxi Preset
 
-默认构建不读取 Fuxi 或 riscv-tests。`fuxi` preset 预期相邻目录布局如下：
+The default build does not access the Fuxi or riscv-tests submodules. The
+`fuxi` preset uses the in-tree checkouts at
+`third_party/Fuxi` and `third_party/riscv-tests`. Initialize
+them after cloning:
 
-```text
-parent/
-├── verilator-axi-testbench/
-├── Fuxi/
-└── riscv-tests/
+```sh
+git submodule update --init
 ```
 
-它使用 `../Fuxi` 和 `../riscv-tests`，启用 Fuxi 及 RV32I/M/A 软件集成：
+The preset enables both the Fuxi integration and the RV32I/M/A software suite:
 
 ```sh
 cmake --preset fuxi
@@ -214,9 +246,10 @@ cmake --build --preset fuxi -j2
 ctest --preset fuxi
 ```
 
-该配置还需要 OpenJDK 11、sbt、支持
-`rv32ima_zicsr_zifencei/ilp32` 的 Clang，以及 `ld.lld`。可用以下 cache 变量
-覆盖自动发现结果或相邻 checkout：
+This configuration also requires OpenJDK 11, sbt, a Clang that supports
+`rv32ima_zicsr_zifencei/ilp32`, and `ld.lld`. The following
+cache variables can override automatic tool discovery or the default submodule
+paths:
 
 - `AXI_TB_FUXI_SOURCE_DIR`
 - `AXI_TB_FUXI_JAVA_HOME`
@@ -225,31 +258,41 @@ ctest --preset fuxi
 - `AXI_TB_RISCV_CLANG`
 - `AXI_TB_RISCV_LLD`
 
-配置阶段只把 Fuxi 所需文件复制到 build staging，并在 staging 中用 Java 11、
-Chisel 3.2.8 和 iotesters 1.3.8 生成 `Fuxi.v`；不会修改外部 checkout，也不会改写
-staging 中的 Fuxi 源码。Fuxi 的三个端口固定映射为 instruction/data/uncached，
-IRQ 绑 0，并断言遗留 AXI3 `WID` 始终为 0。
+During configuration, only the files required by Fuxi are copied into a build
+staging directory. Java 11, Chisel 3.2.8, and iotesters 1.3.8 then generate
+`Fuxi.v` inside that stage. Neither submodule checkout is modified, and
+the staged Fuxi sources are not rewritten. Fuxi's three ports are mapped in
+instruction/data/uncached order, its timer and external IRQs are tied low, and
+its soft IRQ is driven only by the opt-in MMIO test hook. The integration
+asserts that the legacy AXI3 `WID` remains 0.
 
-可选测试包含 UART/Exit smoke、xRET/pending-IRQ 回归、4 个 AXI response
-access-fault 回归，以及直接从 upstream assembly 编译的 59 个 RV32I/M/A guest。
-xRET 回归使用软件设置的 supervisor pending interrupt，不依赖 adapter 的外部 IRQ。
-MMIO interrupt 回归则通过默认关闭的 Fuxi adapter plusarg hook，在 UART W 握手后、
-BRESP 完成前拉高一次 soft IRQ，并验证字符只写出一次。
-SFENCE 回归使用落在 uncached 窗口的 `rs1`，分别检查 clean D-cache 正常完成，以及
-dirty ROM line 写回失败时 cause 7 不会被 demand 地址路由遮蔽。
-response 回归分别覆盖 instruction
-和 cacheable load 的 RRESP、uncached store 和 D-cache dirty eviction 的 BRESP，并
-检查 Fuxi 报告的 exception cause。`ma_data` 作为单独的 misaligned-access
-capability 测试，默认不属于 59 项门槛；它用于记录 DUT 选择 trap 还是硬件完成
-非对齐访问。是否通过这些外部测试取决于本机 checkout、工具链与 DUT，本 README
-不把它们声明为已在所有环境验证。
+The optional tests include UART/Exit smoke tests, an xRET/pending-IRQ
+regression, four AXI-response access-fault regressions, and 59 RV32I/M/A guests
+compiled directly from the upstream assembly. The xRET regression uses a
+software-set supervisor pending interrupt and does not depend on an external
+adapter IRQ. The MMIO interrupt regression uses an otherwise disabled Fuxi
+adapter plusarg hook to raise a soft IRQ once after the UART W handshake but
+before the BRESP completes, then verifies that the character is written
+exactly once.
 
-Fuxi smoke、AXI response 和 59 项 ISA 回归使用固定 seed 的 35% AXI ingress
-backpressure；
-`fence_i` 另有一项 80% stall 的 D-cache writeback 回归，专门检查 WVALID 和
-payload 在 WREADY 拉低期间保持稳定。
+The SFENCE regressions use an `rs1` value in the uncached window. They
+check both successful completion with a clean D-cache and, when a dirty ROM
+line fails to write back, that cause 7 is not hidden by demand-address routing.
+The response regressions cover RRESP for instruction fetches and cacheable
+loads, BRESP for uncached stores and dirty D-cache evictions, and verify the
+exception cause reported by Fuxi. `ma_data` is a separate,
+misaligned-access capability test and is not part of the default 59-test gate.
+It records whether the DUT chooses to trap or complete an unaligned access in
+hardware. Whether these integration tests pass depends on the pinned submodule
+revisions, the local toolchain, and the DUT; this README does not claim they
+have been validated in every environment.
 
-配置成功后可按 CTest label 分组运行：
+The Fuxi smoke, AXI-response, and 59 ISA regressions use deterministic 35% AXI
+ingress backpressure. A separate `fence_i` regression uses an 80% stall
+rate during D-cache writeback to check that WVALID and its payload remain
+stable while WREADY is low.
+
+After configuration succeeds, tests can be selected by CTest label:
 
 ```sh
 ctest --preset fuxi -L fuxi
@@ -258,6 +301,7 @@ ctest --preset fuxi -L rv32m
 ctest --preset fuxi -L rv32a
 ```
 
-如需显式加入 Fuxi 预期以 trap 处理的 `ma_data` capability 项，重新配置时设置
-`-DAXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY=ON`，随后可用 `-L capability` 单独选择；该
-选项默认关闭。
+To include Fuxi's `ma_data` capability case, which Fuxi expects to
+handle with a trap, reconfigure with
+`-DAXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY=ON`. It can then be selected
+separately with `-L capability`. This option is disabled by default.
