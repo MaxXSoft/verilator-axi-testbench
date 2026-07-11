@@ -24,8 +24,9 @@ The uncached region is `0x10000000..0x1fffffff`; UART and guest exit are at
 while data and BSS are loaded into executable RAM beginning at `0x80000000`.
 
 The `fuxi_software` target builds four general smoke guests, two interrupt
-guests, four AXI-response fault guests, and exactly 59 default upstream ISA
-guests (41 I including `fence_i`, 8 M, and 10 A).  The xRET guest uses a
+guests, two SFENCE maintenance guests, four AXI-response fault guests, and
+exactly 59 default upstream ISA guests (41 I including `fence_i`, 8 M, and
+10 A).  The xRET guest uses a
 software-pending supervisor interrupt and therefore does not need an external
 adapter IRQ.  The fault guests check instruction/load RRESP,
 uncached-store BRESP, and dirty D-cache eviction BRESP propagation to the
@@ -40,3 +41,7 @@ exercise D-cache W-channel stability during dirty-line writeback.
 `+fuxi-mmio-store-irq` adapter hook.  It raises a one-shot soft IRQ after a
 marked UART W handshake, keeps it pending through B, and verifies exact stdout
 so replaying the interrupted MMIO store is detected.
+
+The SFENCE maintenance regressions use an `rs1` value inside the uncached
+window.  One checks clean-cache completion; the other dirties a ROM line and
+requires the flush BRESP failure to emerge as store-access-fault cause 7.

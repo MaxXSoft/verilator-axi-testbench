@@ -67,6 +67,8 @@ axi_tb_add_riscv_software(
   OUT_UART _fuxi_uart_elf
   OUT_XRET_IRQ _fuxi_xret_irq_elf
   OUT_MMIO_STORE_IRQ _fuxi_mmio_store_irq_elf
+  OUT_SFENCE_UNCACHED _fuxi_sfence_uncached_elf
+  OUT_SFENCE_WRITEBACK_FAULT _fuxi_sfence_writeback_fault_elf
   OUT_ACCESS_LOAD _fuxi_access_load_elf
   OUT_ACCESS_STORE _fuxi_access_store_elf
   OUT_ACCESS_FETCH _fuxi_access_fetch_elf
@@ -147,6 +149,16 @@ if(BUILD_TESTING)
   set_tests_properties(fuxi_protocol_mmio_store_irq_once PROPERTIES
     LABELS "fuxi;protocol;interrupt;mmio"
     TIMEOUT 120
+  )
+
+  _fuxi_add_expected_test(fuxi_protocol_sfence_uncached_route
+    "${_fuxi_sfence_uncached_elf}" 0 1000000)
+  _fuxi_add_expected_test(fuxi_protocol_sfence_writeback_fault
+    "${_fuxi_sfence_writeback_fault_elf}" 1 1000000 "0x80000007")
+  set_tests_properties(
+    fuxi_protocol_sfence_uncached_route
+    fuxi_protocol_sfence_writeback_fault
+    PROPERTIES LABELS "fuxi;protocol;cache-maintenance;sfence" TIMEOUT 120
   )
 
   _fuxi_add_expected_test(fuxi_protocol_rresp_load_access_fault

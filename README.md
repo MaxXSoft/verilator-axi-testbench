@@ -235,6 +235,8 @@ access-fault 回归，以及直接从 upstream assembly 编译的 59 个 RV32I/M
 xRET 回归使用软件设置的 supervisor pending interrupt，不依赖 adapter 的外部 IRQ。
 MMIO interrupt 回归则通过默认关闭的 Fuxi adapter plusarg hook，在 UART W 握手后、
 BRESP 完成前拉高一次 soft IRQ，并验证字符只写出一次。
+SFENCE 回归使用落在 uncached 窗口的 `rs1`，分别检查 clean D-cache 正常完成，以及
+dirty ROM line 写回失败时 cause 7 不会被 demand 地址路由遮蔽。
 response 回归分别覆盖 instruction
 和 cacheable load 的 RRESP、uncached store 和 D-cache dirty eviction 的 BRESP，并
 检查 Fuxi 报告的 exception cause。`ma_data` 作为单独的 misaligned-access
