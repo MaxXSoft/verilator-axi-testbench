@@ -125,6 +125,10 @@ struct Options {
     } else if (name == "--stall-probability") {
       options.stall_probability =
           parse_probability(argument(index, name), name);
+    } else if (!name.empty() && name.front() == '+') {
+      // Verilator/SystemVerilog plusargs are consumed by the model through
+      // VerilatedContext::commandArgs().  They intentionally have no generic
+      // simulator-side meaning.
     } else {
       throw std::invalid_argument("unknown option: " + std::string(name));
     }
@@ -159,7 +163,8 @@ void print_help(const char *program) {
       << "  --reset-cycles N       Reset rising edges (default 5)\n"
       << "  --seed N               Random-stall seed (default 1)\n"
       << "  --stall-probability P  AW/W/AR READY stall probability [0,1]\n"
-      << "  --trace FILE           Write VCD when tracing was compiled in\n\n"
+      << "  --trace FILE           Write VCD when tracing was compiled in\n"
+      << "  +NAME[=VALUE]          Pass a plusarg through to the RTL model\n\n"
       << "UART:\n"
       << "  --uart-in FILE|-       Input bytes (default stdin)\n"
       << "  --uart-out FILE|-      Output bytes (default stdout)\n";

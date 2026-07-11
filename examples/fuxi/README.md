@@ -23,8 +23,8 @@ The uncached region is `0x10000000..0x1fffffff`; UART and guest exit are at
 `0x10000000` and `0x10001000`.  Guest code starts at Fuxi's reset PC `0x200`,
 while data and BSS are loaded into executable RAM beginning at `0x80000000`.
 
-The `fuxi_software` target builds four general smoke guests, an xRET/pending-IRQ
-guest, four AXI-response fault guests, and exactly 59 default upstream ISA
+The `fuxi_software` target builds four general smoke guests, two interrupt
+guests, four AXI-response fault guests, and exactly 59 default upstream ISA
 guests (41 I including `fence_i`, 8 M, and 10 A).  The xRET guest uses a
 software-pending supervisor interrupt and therefore does not need an external
 adapter IRQ.  The fault guests check instruction/load RRESP,
@@ -35,3 +35,8 @@ its CTest is disabled unless `AXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY=ON`.
 The enabled smoke, AXI-response, and ISA tests inject deterministic 35% AXI
 ingress backpressure, and a dedicated `fence_i` replay uses 80% stall to
 exercise D-cache W-channel stability during dirty-line writeback.
+
+`fuxi_protocol_mmio_store_irq_once` enables the otherwise inert
+`+fuxi-mmio-store-irq` adapter hook.  It raises a one-shot soft IRQ after a
+marked UART W handshake, keeps it pending through B, and verifies exact stdout
+so replaying the interrupted MMIO store is detected.

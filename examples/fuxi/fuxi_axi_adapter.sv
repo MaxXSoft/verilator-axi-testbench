@@ -16,6 +16,42 @@ module fuxi_axi_adapter #(
   logic [3:0] data_wid;
   logic [3:0] uncached_wid;
 
+  // Optional one-shot test hook.  A write of 'Q' to UART THR raises the soft
+  // IRQ immediately after its W handshake and keeps it asserted while the
+  // uncached master waits for B.  The trap handler clears it by writing UART
+  // MCR.  The hook is inert unless explicitly enabled with the plusarg.
+  logic        irq_soft;
+  logic        mmio_irq_hook_enabled;
+  logic        mmio_irq_hook_fired;
+  logic [31:0] uncached_write_addr;
+
+  initial begin
+    mmio_irq_hook_enabled = $test$plusargs("fuxi-mmio-store-irq");
+  end
+
+  always_ff @(posedge clk) begin
+    if (!aresetn) begin
+      irq_soft            <= 1'b0;
+      mmio_irq_hook_fired <= 1'b0;
+      uncached_write_addr <= '0;
+    end else begin
+      if (axi_aw_valid[2] && axi_aw_ready[2])
+        uncached_write_addr <= axi_aw_addr[2];
+
+      if (mmio_irq_hook_enabled && !mmio_irq_hook_fired &&
+          axi_w_valid[2] && axi_w_ready[2] && axi_w_strb[2][0] &&
+          uncached_write_addr == 32'h1000_0000 &&
+          axi_w_data[2][7:0] == 8'h51) begin
+        irq_soft            <= 1'b1;
+        mmio_irq_hook_fired <= 1'b1;
+      end
+
+      if (mmio_irq_hook_enabled && axi_w_valid[2] && axi_w_ready[2] &&
+          uncached_write_addr == 32'h1000_0004)
+        irq_soft <= 1'b0;
+    end
+  end
+
   // Fuxi predates AXI4 and still exposes AXI3 WID.  It only ever emits ID 0;
   // assert that invariant every live cycle, then intentionally discard WID.
   always_ff @(posedge clk) begin
@@ -39,7 +75,7 @@ module fuxi_axi_adapter #(
     .clk              (clk),
     .rst              (~aresetn),
     .irq_timer        (1'b0),
-    .irq_soft         (1'b0),
+    .irq_soft         (irq_soft),
     .irq_extern       (1'b0),
     .debug_wen        (),
     .debug_waddr      (),

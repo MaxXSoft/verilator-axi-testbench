@@ -158,6 +158,7 @@ my_core_sim [options]
   --seed N                   fabric 随机 stall seed；默认 1
   --stall-probability P      AW/W/AR READY stall 概率 [0,1]；默认 0
   --trace FILE               写 VCD；目标必须以 TRACE 编译
+  +NAME[=VALUE]              原样传给 Verilated RTL 的 plusarg
 ```
 
 `--elf` 不能和 raw image 选项同时使用。ELF loader 先验证全部 PT_LOAD，再写入
@@ -232,6 +233,8 @@ IRQ 绑 0，并断言遗留 AXI3 `WID` 始终为 0。
 可选测试包含 UART/Exit smoke、xRET/pending-IRQ 回归、4 个 AXI response
 access-fault 回归，以及直接从 upstream assembly 编译的 59 个 RV32I/M/A guest。
 xRET 回归使用软件设置的 supervisor pending interrupt，不依赖 adapter 的外部 IRQ。
+MMIO interrupt 回归则通过默认关闭的 Fuxi adapter plusarg hook，在 UART W 握手后、
+BRESP 完成前拉高一次 soft IRQ，并验证字符只写出一次。
 response 回归分别覆盖 instruction
 和 cacheable load 的 RRESP、uncached store 和 D-cache dirty eviction 的 BRESP，并
 检查 Fuxi 报告的 exception cause。`ma_data` 作为单独的 misaligned-access

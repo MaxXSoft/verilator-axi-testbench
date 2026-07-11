@@ -12,6 +12,9 @@ if(NOT DEFINED MAX_CYCLES)
 endif()
 
 set(_command "${PROGRAM}" --elf "${ELF}" --max-cycles "${MAX_CYCLES}")
+if(DEFINED EXTRA_ARGUMENTS)
+  list(APPEND _command ${EXTRA_ARGUMENTS})
+endif()
 if(DEFINED STALL_PROBABILITY)
   list(APPEND _command --stall-probability "${STALL_PROBABILITY}")
 endif()
@@ -43,6 +46,12 @@ if(DEFINED EXPECTED_OUTPUT AND
   message(FATAL_ERROR
     "Simulator output did not match '${EXPECTED_OUTPUT}'.\n"
     "stdout:\n${_stdout}\n"
+    "stderr:\n${_stderr}")
+endif()
+
+if(DEFINED EXPECTED_STDOUT AND NOT "${_stdout}" STREQUAL "${EXPECTED_STDOUT}")
+  message(FATAL_ERROR
+    "Simulator stdout was '${_stdout}', expected exactly '${EXPECTED_STDOUT}'.\n"
     "stderr:\n${_stderr}")
 endif()
 

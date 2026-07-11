@@ -66,6 +66,7 @@ axi_tb_add_riscv_software(
   OUT_TIMEOUT _fuxi_timeout_elf
   OUT_UART _fuxi_uart_elf
   OUT_XRET_IRQ _fuxi_xret_irq_elf
+  OUT_MMIO_STORE_IRQ _fuxi_mmio_store_irq_elf
   OUT_ACCESS_LOAD _fuxi_access_load_elf
   OUT_ACCESS_STORE _fuxi_access_store_elf
   OUT_ACCESS_FETCH _fuxi_access_fetch_elf
@@ -127,6 +128,24 @@ if(BUILD_TESTING)
     "${_fuxi_xret_irq_elf}" 0 1000000)
   set_tests_properties(fuxi_protocol_xret_pending_irq PROPERTIES
     LABELS "fuxi;protocol;interrupt;xret"
+    TIMEOUT 120
+  )
+
+  add_test(
+    NAME fuxi_protocol_mmio_store_irq_once
+    COMMAND "${CMAKE_COMMAND}"
+      "-DPROGRAM=$<TARGET_FILE:fuxi_sim>"
+      "-DELF=${_fuxi_mmio_store_irq_elf}"
+      -DEXPECTED_RESULT=0
+      -DMAX_CYCLES=1000000
+      -DSTALL_PROBABILITY=0.35
+      -DSEED=12345
+      -DEXTRA_ARGUMENTS=+fuxi-mmio-store-irq
+      -DEXPECTED_STDOUT=Q
+      -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
+  )
+  set_tests_properties(fuxi_protocol_mmio_store_irq_once PROPERTIES
+    LABELS "fuxi;protocol;interrupt;mmio"
     TIMEOUT 120
   )
 

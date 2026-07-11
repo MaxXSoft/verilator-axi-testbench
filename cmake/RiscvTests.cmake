@@ -293,7 +293,7 @@ function(axi_tb_add_riscv_software)
     TARGET OUTPUT_DIR RISCV_TESTS_DIR
     ROM_BASE ROM_SIZE RAM_BASE RAM_SIZE UART_BASE EXIT_BASE RESET_PC
     OUT_PASS OUT_FAIL OUT_TIMEOUT OUT_UART
-    OUT_XRET_IRQ
+    OUT_XRET_IRQ OUT_MMIO_STORE_IRQ
     OUT_ACCESS_LOAD OUT_ACCESS_STORE OUT_ACCESS_FETCH
     OUT_ACCESS_DCACHE_WRITEBACK
     OUT_RISCV_NAMES OUT_RISCV_ELFS OUT_MA_DATA
@@ -371,7 +371,7 @@ function(axi_tb_add_riscv_software)
 
   add_custom_target("${SW_TARGET}")
   foreach(_smoke IN ITEMS
-      pass fail timeout uart xret_irq
+      pass fail timeout uart xret_irq mmio_store_irq
       access_load access_store access_fetch access_dcache_writeback)
     set(_elf "${_output_dir}/smoke/${_smoke}.elf")
     set(_target "${SW_TARGET}_smoke_${_smoke}")
