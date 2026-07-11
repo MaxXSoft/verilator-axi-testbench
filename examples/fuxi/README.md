@@ -23,10 +23,13 @@ The uncached region is `0x10000000..0x1fffffff`; UART and guest exit are at
 `0x10000000` and `0x10001000`.  Guest code starts at Fuxi's reset PC `0x200`,
 while data and BSS are loaded into executable RAM beginning at `0x80000000`.
 
-The `fuxi_software` target builds four smoke guests and exactly 59 default
-upstream ISA guests (41 I including `fence_i`, 8 M, and 10 A).  The additional
+The `fuxi_software` target builds four general smoke guests, four AXI-response
+fault guests, and exactly 59 default upstream ISA guests (41 I including
+`fence_i`, 8 M, and 10 A).  The fault guests check instruction/load RRESP,
+uncached-store BRESP, and dirty D-cache eviction BRESP propagation to the
+architectural access-fault causes.  The additional
 `fuxi_software_capability_misaligned_ma_data` target is non-gating and separate;
 its CTest is disabled unless `AXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY=ON`.
-The enabled smoke/ISA tests inject deterministic 35% AXI ingress backpressure,
-and a dedicated `fence_i` replay uses 80% stall to exercise D-cache W-channel
-stability during dirty-line writeback.
+The enabled smoke, AXI-response, and ISA tests inject deterministic 35% AXI
+ingress backpressure, and a dedicated `fence_i` replay uses 80% stall to
+exercise D-cache W-channel stability during dirty-line writeback.

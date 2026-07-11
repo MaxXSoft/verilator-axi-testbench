@@ -65,6 +65,10 @@ axi_tb_add_riscv_software(
   OUT_FAIL _fuxi_fail_elf
   OUT_TIMEOUT _fuxi_timeout_elf
   OUT_UART _fuxi_uart_elf
+  OUT_ACCESS_LOAD _fuxi_access_load_elf
+  OUT_ACCESS_STORE _fuxi_access_store_elf
+  OUT_ACCESS_FETCH _fuxi_access_fetch_elf
+  OUT_ACCESS_DCACHE_WRITEBACK _fuxi_access_dcache_writeback_elf
   OUT_RISCV_NAMES _fuxi_riscv_names
   OUT_RISCV_ELFS _fuxi_riscv_elfs
   OUT_MA_DATA _fuxi_ma_data_elf
@@ -73,6 +77,10 @@ add_dependencies(fuxi_sim fuxi_software)
 
 if(BUILD_TESTING)
   function(_fuxi_add_expected_test name elf expected_result max_cycles)
+    set(_expected_output_argument)
+    if(ARGC GREATER 4)
+      set(_expected_output_argument "-DEXPECTED_OUTPUT=${ARGV4}")
+    endif()
     add_test(
       NAME "${name}"
       COMMAND "${CMAKE_COMMAND}"
@@ -82,6 +90,7 @@ if(BUILD_TESTING)
         "-DMAX_CYCLES=${max_cycles}"
         -DSTALL_PROBABILITY=0.35
         -DSEED=12345
+        ${_expected_output_argument}
         -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
     )
   endfunction()
@@ -111,6 +120,22 @@ if(BUILD_TESTING)
     fuxi_smoke_timeout
     fuxi_smoke_uart
     PROPERTIES LABELS "fuxi;smoke" TIMEOUT 120
+  )
+
+  _fuxi_add_expected_test(fuxi_protocol_rresp_load_access_fault
+    "${_fuxi_access_load_elf}" 1 1000000 "0x80000005")
+  _fuxi_add_expected_test(fuxi_protocol_bresp_store_access_fault
+    "${_fuxi_access_store_elf}" 1 1000000 "0x80000007")
+  _fuxi_add_expected_test(fuxi_protocol_rresp_fetch_access_fault
+    "${_fuxi_access_fetch_elf}" 1 1000000 "0x80000001")
+  _fuxi_add_expected_test(fuxi_protocol_bresp_dcache_writeback_fault
+    "${_fuxi_access_dcache_writeback_elf}" 1 1000000 "0x80000007")
+  set_tests_properties(
+    fuxi_protocol_rresp_load_access_fault
+    fuxi_protocol_bresp_store_access_fault
+    fuxi_protocol_rresp_fetch_access_fault
+    fuxi_protocol_bresp_dcache_writeback_fault
+    PROPERTIES LABELS "fuxi;protocol;response;access-fault" TIMEOUT 120
   )
 
   if(AXI_TB_FUXI_WITH_RISCV_TESTS)
