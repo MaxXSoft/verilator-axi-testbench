@@ -65,6 +65,7 @@ axi_tb_add_riscv_software(
   OUT_FAIL _fuxi_fail_elf
   OUT_TIMEOUT _fuxi_timeout_elf
   OUT_UART _fuxi_uart_elf
+  OUT_XRET_IRQ _fuxi_xret_irq_elf
   OUT_ACCESS_LOAD _fuxi_access_load_elf
   OUT_ACCESS_STORE _fuxi_access_store_elf
   OUT_ACCESS_FETCH _fuxi_access_fetch_elf
@@ -120,6 +121,13 @@ if(BUILD_TESTING)
     fuxi_smoke_timeout
     fuxi_smoke_uart
     PROPERTIES LABELS "fuxi;smoke" TIMEOUT 120
+  )
+
+  _fuxi_add_expected_test(fuxi_protocol_xret_pending_irq
+    "${_fuxi_xret_irq_elf}" 0 1000000)
+  set_tests_properties(fuxi_protocol_xret_pending_irq PROPERTIES
+    LABELS "fuxi;protocol;interrupt;xret"
+    TIMEOUT 120
   )
 
   _fuxi_add_expected_test(fuxi_protocol_rresp_load_access_fault
