@@ -28,3 +28,6 @@ The `fuxi_software` target builds four smoke guests and exactly 59 default
 upstream ISA guests (41 I including `fence_i`, 8 M, and 10 A).  The additional
 `fuxi_software_capability_misaligned_ma_data` target is non-gating and separate;
 its CTest is disabled unless `AXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY=ON`.
+The enabled smoke/ISA tests inject deterministic 35% AXI ingress backpressure,
+and a dedicated `fence_i` replay uses 80% stall to exercise D-cache W-channel
+stability during dirty-line writeback.

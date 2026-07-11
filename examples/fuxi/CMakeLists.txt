@@ -80,6 +80,8 @@ if(BUILD_TESTING)
         "-DELF=${elf}"
         "-DEXPECTED_RESULT=${expected_result}"
         "-DMAX_CYCLES=${max_cycles}"
+        -DSTALL_PROBABILITY=0.35
+        -DSEED=12345
         -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
     )
   endfunction()
@@ -98,6 +100,8 @@ if(BUILD_TESTING)
       "-DUART_INPUT=${AXI_TB_ROOT_DIR}/software/smoke/uart.in"
       -DEXPECTED_RESULT=0
       -DMAX_CYCLES=1000000
+      -DSTALL_PROBABILITY=0.35
+      -DSEED=12345
       "-DEXPECTED_OUTPUT=Fuxi"
       -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
   )
@@ -132,6 +136,24 @@ if(BUILD_TESTING)
       set(_labels "fuxi;riscv-tests;${_family}")
       if(_name STREQUAL "rv32ui-fence_i")
         list(APPEND _labels fence-i)
+
+        # fence.i writes back dirty D-cache lines.  A high-stall replay keeps
+        # the W-channel VALID/payload stability rule under explicit regression.
+        add_test(
+          NAME fuxi_protocol_dcache_w_backpressure
+          COMMAND "${CMAKE_COMMAND}"
+            "-DPROGRAM=$<TARGET_FILE:fuxi_sim>"
+            "-DELF=${_elf}"
+            -DEXPECTED_RESULT=0
+            -DMAX_CYCLES=1000000
+            -DSTALL_PROBABILITY=0.8
+            -DSEED=1
+            -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
+        )
+        set_tests_properties(fuxi_protocol_dcache_w_backpressure PROPERTIES
+          LABELS "fuxi;protocol;backpressure;fence-i"
+          TIMEOUT 300
+        )
       endif()
       set_tests_properties("${_ctest_name}" PROPERTIES
         LABELS "${_labels}"
