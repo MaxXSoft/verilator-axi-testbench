@@ -45,8 +45,8 @@
       "cacheVariables": {
         "AXI_TB_BUILD_FUXI": "ON",
         "AXI_TB_FUXI_WITH_RISCV_TESTS": "ON",
-        "AXI_TB_FUXI_SOURCE_DIR": "${sourceDir}/../Fuxi",
-        "AXI_TB_RISCV_TESTS_SOURCE_DIR": "${sourceDir}/../riscv-tests"
+        "AXI_TB_FUXI_SOURCE_DIR": "${sourceDir}/third_party/Fuxi",
+        "AXI_TB_RISCV_TESTS_SOURCE_DIR": "${sourceDir}/third_party/riscv-tests"
       }
     }
   ],
