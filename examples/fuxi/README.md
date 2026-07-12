@@ -10,8 +10,8 @@ modification.
 The integration expects:
 
 - `AXI_TB_FUXI_SOURCE_DIR`: Fuxi checkout.
-- `AXI_TB_FUXI_JAVA_HOME`: Java 11 home (defaults to Homebrew
-  `/opt/homebrew/opt/openjdk@11`).
+- `AXI_TB_FUXI_JAVA_HOME`: optional Java 17-or-newer home; when unset, `java`
+  is discovered from `PATH`.
 - `AXI_TB_FUXI_SBT_EXECUTABLE`: optional explicit `sbt` path.
 - `AXI_TB_RISCV_TESTS_SOURCE_DIR`: riscv-tests checkout when
   `AXI_TB_FUXI_WITH_RISCV_TESTS=ON`; the `fuxi` preset enables it.

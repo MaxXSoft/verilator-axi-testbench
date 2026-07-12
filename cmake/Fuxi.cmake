@@ -4,8 +4,8 @@ include(CMakeParseArguments)
 
 set(AXI_TB_FUXI_SOURCE_DIR "" CACHE PATH
     "Path to an existing Fuxi checkout (used only when integration is enabled)")
-set(AXI_TB_FUXI_JAVA_HOME "/opt/homebrew/opt/openjdk@11" CACHE PATH
-    "Java 11 home used to elaborate Fuxi")
+set(AXI_TB_FUXI_JAVA_HOME "" CACHE PATH
+    "Optional Java 17+ home used to elaborate Fuxi")
 set(AXI_TB_FUXI_SBT_EXECUTABLE "" CACHE FILEPATH
     "Path to sbt; leave empty to search PATH")
 
@@ -84,26 +84,45 @@ function(axi_tb_prepare_fuxi)
   endforeach()
 
   set(_generated_dir "${_stage_dir}/verilog/build")
-  set(_tmp_dir "${_stage_dir}/tmp")
-  file(MAKE_DIRECTORY "${_generated_dir}" "${_tmp_dir}")
+  file(MAKE_DIRECTORY "${_generated_dir}")
 
-  if(NOT IS_DIRECTORY "${AXI_TB_FUXI_JAVA_HOME}" OR
-     NOT EXISTS "${AXI_TB_FUXI_JAVA_HOME}/bin/java")
-    message(FATAL_ERROR
-      "Fuxi elaboration requires Java 11 at AXI_TB_FUXI_JAVA_HOME; got "
-      "'${AXI_TB_FUXI_JAVA_HOME}'")
+  set(_java_environment)
+  if(AXI_TB_FUXI_JAVA_HOME)
+    if(NOT IS_DIRECTORY "${AXI_TB_FUXI_JAVA_HOME}" OR
+       NOT EXISTS "${AXI_TB_FUXI_JAVA_HOME}/bin/java")
+      message(FATAL_ERROR
+        "AXI_TB_FUXI_JAVA_HOME must contain bin/java; got "
+        "'${AXI_TB_FUXI_JAVA_HOME}'")
+    endif()
+    set(_java "${AXI_TB_FUXI_JAVA_HOME}/bin/java")
+    list(APPEND _java_environment
+      "JAVA_HOME=${AXI_TB_FUXI_JAVA_HOME}"
+      "PATH=${AXI_TB_FUXI_JAVA_HOME}/bin:$ENV{PATH}"
+    )
+  else()
+    find_program(_java NAMES java)
+    if(NOT _java)
+      message(FATAL_ERROR
+        "Fuxi elaboration requires Java 17 or newer; set "
+        "AXI_TB_FUXI_JAVA_HOME or add java to PATH")
+    endif()
   endif()
   execute_process(
-    COMMAND "${AXI_TB_FUXI_JAVA_HOME}/bin/java" -version
+    COMMAND "${_java}" -version
     OUTPUT_VARIABLE _java_stdout
     ERROR_VARIABLE _java_stderr
     RESULT_VARIABLE _java_result
   )
   string(CONCAT _java_version_text "${_java_stdout}" "${_java_stderr}")
   if(NOT _java_result EQUAL 0 OR
-     NOT _java_version_text MATCHES "version[ \t]+\"11\\.")
+     NOT _java_version_text MATCHES "version[ \t]+\"([0-9]+)")
     message(FATAL_ERROR
-      "AXI_TB_FUXI_JAVA_HOME must select Java 11; version output was:\n"
+      "Unable to determine the Java version used for Fuxi:\n"
+      "${_java_version_text}")
+  endif()
+  if(CMAKE_MATCH_1 LESS 17)
+    message(FATAL_ERROR
+      "Fuxi requires Java 17 or newer; version output was:\n"
       "${_java_version_text}")
   endif()
 
@@ -114,20 +133,15 @@ function(axi_tb_prepare_fuxi)
   endif()
   if(NOT _sbt OR NOT EXISTS "${_sbt}")
     message(FATAL_ERROR
-      "Fuxi elaboration requires sbt 1.3.2; set "
+      "Fuxi elaboration requires sbt; set "
       "AXI_TB_FUXI_SBT_EXECUTABLE or add sbt to PATH")
   endif()
 
   set(_fuxi_v "${_generated_dir}/Fuxi.v")
   execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env
-      "JAVA_HOME=${AXI_TB_FUXI_JAVA_HOME}"
-      "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=${_tmp_dir}"
-      "TMPDIR=${_tmp_dir}"
-      "PATH=${AXI_TB_FUXI_JAVA_HOME}/bin:$ENV{PATH}"
+      ${_java_environment}
       "${_sbt}"
-      -Dchisel3Version=3.2.8
-      -Dchisel-iotestersVersion=1.3.8
       "runMain Fuxi --target-dir ${_generated_dir}"
     WORKING_DIRECTORY "${_stage_dir}"
     OUTPUT_VARIABLE _sbt_stdout

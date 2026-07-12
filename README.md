@@ -246,7 +246,8 @@ cmake --build --preset fuxi -j2
 ctest --preset fuxi
 ```
 
-This configuration also requires OpenJDK 11, sbt, a Clang that supports
+This configuration uses Fuxi's Chisel 7.13.0 and Scala 2.13.18 build. It
+requires JDK 17 or newer, sbt, a Clang that supports
 `rv32ima_zicsr_zifencei/ilp32`, and `ld.lld`. The following
 cache variables can override automatic tool discovery or the default submodule
 paths:
@@ -259,8 +260,8 @@ paths:
 - `AXI_TB_RISCV_LLD`
 
 During configuration, only the files required by Fuxi are copied into a build
-staging directory. Java 11, Chisel 3.2.8, and iotesters 1.3.8 then generate
-`Fuxi.v` inside that stage. Neither submodule checkout is modified, and
+staging directory. Fuxi's sbt build then generates `Fuxi.v` inside that stage.
+Neither submodule checkout is modified, and
 the staged Fuxi sources are not rewritten. Fuxi's three ports are mapped in
 instruction/data/uncached order, its timer and external IRQs are tied low, and
 its soft IRQ is driven only by the opt-in MMIO test hook. The integration
