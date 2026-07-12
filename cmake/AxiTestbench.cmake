@@ -181,12 +181,13 @@ module name.
   )
 
 ``CXX_SOURCES``, ``INCLUDE_DIRS``, and ``VERILATOR_ARGS`` are optional
-multi-value extensions. ``TRACE`` enables VCD for one target; otherwise the
-global ``AXI_TB_ENABLE_TRACE`` option is used. ``EXIT_ADDRESS`` is accepted as
-an alias for ``EXIT_BASE``.
+multi-value extensions. ``TRACE`` enables VCD for one target and ``TRACE_FST``
+enables FST; otherwise the matching global option is used. A target cannot
+enable both formats. ``EXIT_ADDRESS`` is accepted as an alias for
+``EXIT_BASE``.
 #]=======================================================================]
 function(add_axi_testbench)
-  set(_options TRACE)
+  set(_options TRACE TRACE_FST)
   set(_one_value
     TARGET TOP
     NUM_AXI ADDR_WIDTH DATA_WIDTH ID_WIDTH
@@ -265,11 +266,30 @@ function(add_axi_testbench)
   endforeach()
   _axi_tb_validate_address_map()
 
+  set(_trace_vcd_enabled FALSE)
+  set(_trace_fst_enabled FALSE)
   if(AXI_TB_TRACE OR AXI_TB_ENABLE_TRACE)
+    set(_trace_vcd_enabled TRUE)
+  endif()
+  if(AXI_TB_TRACE_FST OR AXI_TB_ENABLE_FST_TRACE)
+    set(_trace_fst_enabled TRUE)
+  endif()
+  if(_trace_vcd_enabled AND _trace_fst_enabled)
+    message(FATAL_ERROR
+      "add_axi_testbench(${AXI_TB_TARGET}): VCD and FST tracing are mutually exclusive")
+  endif()
+
+  if(_trace_fst_enabled)
     set(AXI_TB_TRACE_ENABLED 1)
+    set(AXI_TB_TRACE_FST_ENABLED 1)
+    set(_trace_argument TRACE_FST)
+  elseif(_trace_vcd_enabled)
+    set(AXI_TB_TRACE_ENABLED 1)
+    set(AXI_TB_TRACE_FST_ENABLED 0)
     set(_trace_argument TRACE_VCD)
   else()
     set(AXI_TB_TRACE_ENABLED 0)
+    set(AXI_TB_TRACE_FST_ENABLED 0)
     set(_trace_argument)
   endif()
 
@@ -312,6 +332,29 @@ function(add_axi_testbench)
   )
   target_compile_features("${AXI_TB_TARGET}" PRIVATE cxx_std_20)
   target_link_libraries("${AXI_TB_TARGET}" PRIVATE axi_tb::core)
+  if(_trace_fst_enabled)
+    find_path(AXI_TB_LZ4_INCLUDE_DIR NAMES lz4.h REQUIRED)
+    find_library(AXI_TB_LZ4_LIBRARY NAMES lz4 REQUIRED)
+    find_package(ZLIB REQUIRED)
+    get_filename_component(_lz4_library_dir
+      "${AXI_TB_LZ4_LIBRARY}" DIRECTORY)
+    set(_fst_library_dirs "${_lz4_library_dir}")
+    foreach(_zlib_library IN LISTS ZLIB_LIBRARIES)
+      if(IS_ABSOLUTE "${_zlib_library}")
+        get_filename_component(_zlib_library_dir
+          "${_zlib_library}" DIRECTORY)
+        list(APPEND _fst_library_dirs "${_zlib_library_dir}")
+        break()
+      endif()
+    endforeach()
+    target_include_directories("${AXI_TB_TARGET}" SYSTEM PRIVATE
+      "${AXI_TB_LZ4_INCLUDE_DIR}" ${ZLIB_INCLUDE_DIRS})
+    # Verilator links FST runtimes with -llz4 -lz. Add the discovered search
+    # directories because package-manager prefixes are not always compiler
+    # defaults (notably Homebrew on Apple Silicon).
+    target_link_directories("${AXI_TB_TARGET}" PRIVATE
+      ${_fst_library_dirs})
+  endif()
   target_include_directories("${AXI_TB_TARGET}" PRIVATE
     "${_generated_dir}"
     ${AXI_TB_INCLUDE_DIRS}

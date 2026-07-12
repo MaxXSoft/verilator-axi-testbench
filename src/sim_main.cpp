@@ -21,7 +21,11 @@
 #include "verilated.h"
 
 #if AXI_TB_TRACE_ENABLED
+#if AXI_TB_TRACE_FST_ENABLED
+#include "verilated_fst_c.h"
+#else
 #include "verilated_vcd_c.h"
+#endif
 #endif
 
 #if defined(__unix__) || defined(__APPLE__)
@@ -42,6 +46,14 @@ namespace {
 constexpr int configuration_error = 2;
 constexpr int protocol_error = 3;
 constexpr int timeout_error = 124;
+
+#if AXI_TB_TRACE_ENABLED
+#if AXI_TB_TRACE_FST_ENABLED
+using TraceWriter = VerilatedFstC;
+#else
+using TraceWriter = VerilatedVcdC;
+#endif
+#endif
 
 volatile std::sig_atomic_t interrupted = 0;
 
@@ -143,8 +155,7 @@ struct Options {
 #if !AXI_TB_TRACE_ENABLED
   if (options.trace) {
     throw std::invalid_argument(
-        "--trace requires a target configured with TRACE or "
-        "-DAXI_TB_ENABLE_TRACE=ON");
+        "--trace requires tracing to be enabled when configuring the target");
   }
 #endif
   return options;
@@ -163,7 +174,7 @@ void print_help(const char *program) {
       << "  --reset-cycles N       Reset rising edges (default 5)\n"
       << "  --seed N               Random-stall seed (default 1)\n"
       << "  --stall-probability P  AW/W/AR READY stall probability [0,1]\n"
-      << "  --trace FILE           Write VCD when tracing was compiled in\n"
+      << "  --trace FILE           Write the build-selected VCD or FST trace\n"
       << "  +NAME[=VALUE]          Pass a plusarg through to the RTL model\n\n"
       << "UART:\n"
       << "  --uart-in FILE|-       Input bytes (default stdin)\n"
@@ -307,10 +318,10 @@ int run_simulation(int argc, char **argv, const Options &options) {
   fabric.set_stall_probability(options.stall_probability);
 
 #if AXI_TB_TRACE_ENABLED
-  std::unique_ptr<VerilatedVcdC> trace;
+  std::unique_ptr<TraceWriter> trace;
   if (options.trace) {
     context.traceEverOn(true);
-    trace = std::make_unique<VerilatedVcdC>();
+    trace = std::make_unique<TraceWriter>();
     top.trace(trace.get(), 99);
     trace->open(options.trace->string().c_str());
     if (!trace->isOpen()) {
@@ -318,7 +329,7 @@ int run_simulation(int argc, char **argv, const Options &options) {
                                options.trace->string());
     }
   }
-  VerilatedVcdC *trace_pointer = trace.get();
+  TraceWriter *trace_pointer = trace.get();
 #else
   NullTrace *trace_pointer = nullptr;
 #endif

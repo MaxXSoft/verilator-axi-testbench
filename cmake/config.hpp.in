@@ -18,6 +18,7 @@
 #define AXI_TB_EXIT_SIZE UINT64_C(@AXI_TB_EXIT_SIZE@)
 
 #define AXI_TB_TRACE_ENABLED @AXI_TB_TRACE_ENABLED@
+#define AXI_TB_TRACE_FST_ENABLED @AXI_TB_TRACE_FST_ENABLED@
 
 namespace axi_tb::config {
 
@@ -37,6 +38,7 @@ inline constexpr std::uint64_t exit_base = AXI_TB_EXIT_BASE;
 inline constexpr std::uint64_t exit_size = AXI_TB_EXIT_SIZE;
 
 inline constexpr bool trace_enabled = AXI_TB_TRACE_ENABLED != 0;
+inline constexpr bool trace_fst_enabled = AXI_TB_TRACE_FST_ENABLED != 0;
 
 static_assert(num_ports > 0);
 static_assert(address_bits == 32 || address_bits == 64);

@@ -132,6 +132,31 @@ function(axi_tb_add_runtime_shape suffix num_axi addr_width data_width id_width)
     LABELS "core;protocol;rtl"
     TIMEOUT 30
   )
+
+  if(suffix STREQUAL "32x32_n1" AND
+     (AXI_TB_ENABLE_TRACE OR AXI_TB_ENABLE_FST_TRACE))
+    if(AXI_TB_ENABLE_FST_TRACE)
+      set(_trace_format FST)
+      set(_trace_extension fst)
+    else()
+      set(_trace_format VCD)
+      set(_trace_extension vcd)
+    endif()
+    set(_trace_output
+      "${CMAKE_CURRENT_BINARY_DIR}/${_target}.${_trace_extension}")
+    add_test(
+      NAME "protocol.trace_${_trace_extension}"
+      COMMAND "${CMAKE_COMMAND}"
+        "-DPROGRAM=$<TARGET_FILE:${_target}>"
+        "-DOUTPUT=${_trace_output}"
+        "-DFORMAT=${_trace_format}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_trace.cmake"
+    )
+    set_tests_properties("protocol.trace_${_trace_extension}" PROPERTIES
+      LABELS "core;protocol;rtl;trace;${_trace_extension}"
+      TIMEOUT 30
+    )
+  endif()
 endfunction()
 
 axi_tb_add_runtime_shape(32x32_n1 1 32 32 1)

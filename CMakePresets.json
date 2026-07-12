@@ -15,7 +15,8 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "AXI_TB_BUILD_TESTS": "ON",
-        "AXI_TB_ENABLE_TRACE": "OFF"
+        "AXI_TB_ENABLE_TRACE": "OFF",
+        "AXI_TB_ENABLE_FST_TRACE": "OFF"
       }
     },
     {
@@ -35,6 +36,15 @@
       "binaryDir": "${sourceDir}/build/trace",
       "cacheVariables": {
         "AXI_TB_ENABLE_TRACE": "ON"
+      }
+    },
+    {
+      "name": "trace-fst",
+      "displayName": "Development with FST tracing",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/trace-fst",
+      "cacheVariables": {
+        "AXI_TB_ENABLE_FST_TRACE": "ON"
       }
     },
     {
@@ -62,6 +72,10 @@
     {
       "name": "trace",
       "configurePreset": "trace"
+    },
+    {
+      "name": "trace-fst",
+      "configurePreset": "trace-fst"
     },
     {
       "name": "fuxi",
@@ -102,6 +116,26 @@
       },
       "output": {
         "outputOnFailure": true
+      }
+    },
+    {
+      "name": "trace",
+      "configurePreset": "trace",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "trace-fst",
+      "configurePreset": "trace-fst",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
       }
     },
     {

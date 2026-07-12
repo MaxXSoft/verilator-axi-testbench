@@ -130,8 +130,9 @@ add_axi_testbench(
   EXIT_BASE    0x10001000
   EXIT_SIZE    0x00000004
 
-  # Optional: compile VCD tracing for this target only.
+  # Optional: compile one trace format for this target only.
   TRACE
+  # TRACE_FST
   # Optional multi-value arguments:
   # CXX_SOURCES     ${CMAKE_CURRENT_SOURCE_DIR}/extra_support.cpp
   # INCLUDE_DIRS    ${CMAKE_CURRENT_SOURCE_DIR}/rtl/include
@@ -183,7 +184,7 @@ my_core_sim [options]
   --uart-out FILE|-          UART output; default stdout, and - also means stdout
   --seed N                   Fabric random-stall seed; default 1
   --stall-probability P      AW/W/AR READY stall probability in [0,1]; default 0
-  --trace FILE               Write VCD; tracing must have been compiled in
+  --trace FILE               Write the build-selected VCD or FST trace
   +NAME[=VALUE]              Pass a plusarg through to the Verilated RTL unchanged
 ```
 
@@ -193,6 +194,18 @@ zeroes each `p_memsz - p_filesz` region. Exit statuses are: guest PASS
 `0`, nonzero guest exit `1`, configuration or image error
 `2`, AXI protocol error (or premature DUT `$finish`)
 `3`, timeout `124`, and SIGINT `130`.
+
+Trace format is selected at configure time. `TRACE` on an
+`add_axi_testbench()` call, or the global `AXI_TB_ENABLE_TRACE=ON`, builds VCD
+support. Use `TRACE_FST` or `AXI_TB_ENABLE_FST_TRACE=ON` for FST instead. The
+two formats are mutually exclusive for a target; the output filename extension
+does not select the format at runtime. FST builds additionally require the LZ4
+and zlib development headers and libraries. The presets provide both variants:
+
+```sh
+cmake --preset trace       # VCD
+cmake --preset trace-fst   # FST
+```
 
 ## Building and Testing
 
