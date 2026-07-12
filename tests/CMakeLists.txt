@@ -107,6 +107,10 @@ axi_tb_add_rtl_lint_test(
 # lint alone would not catch a wrong Verilator scalar/QData/WData layout.
 function(axi_tb_add_runtime_shape suffix num_axi addr_width data_width id_width)
   set(_target "axi_tb_runtime_${suffix}")
+  set(_thread_arguments)
+  if(ARGC GREATER 5)
+    list(APPEND _thread_arguments THREADS "${ARGV5}")
+  endif()
   add_axi_testbench(
     TARGET "${_target}"
     TOP axi_tb_protocol_fixture
@@ -115,6 +119,7 @@ function(axi_tb_add_runtime_shape suffix num_axi addr_width data_width id_width)
     ADDR_WIDTH "${addr_width}"
     DATA_WIDTH "${data_width}"
     ID_WIDTH "${id_width}"
+    ${_thread_arguments}
     ROM_BASE 0x00000000
     ROM_SIZE 0x00010000
     RAM_BASE 0x80000000
@@ -159,6 +164,6 @@ function(axi_tb_add_runtime_shape suffix num_axi addr_width data_width id_width)
   endif()
 endfunction()
 
-axi_tb_add_runtime_shape(32x32_n1 1 32 32 1)
+axi_tb_add_runtime_shape(32x32_n1 1 32 32 1 2)
 axi_tb_add_runtime_shape(64x64_n2 2 64 64 32)
 axi_tb_add_runtime_shape(64x128_n3 3 64 128 8)

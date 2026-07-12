@@ -120,6 +120,7 @@ add_axi_testbench(
   ADDR_WIDTH   64
   DATA_WIDTH   64
   ID_WIDTH     8
+  THREADS      4
 
   ROM_BASE     0x00000000
   ROM_SIZE     0x00010000
@@ -205,6 +206,16 @@ and zlib development headers and libraries. The presets provide both variants:
 ```sh
 cmake --preset trace       # VCD
 cmake --preset trace-fst   # FST
+```
+
+Verilator model parallelism is also selected at configure time. Set
+`THREADS N` on one `add_axi_testbench()` call, or use the global
+`AXI_TB_THREADS=N` cache variable; the default is 1. The count includes the
+thread that calls `eval()`, so a value of 4 creates three worker threads. This
+is independent of the `-j` value used to parallelize the CMake build.
+
+```sh
+cmake --preset default -DAXI_TB_THREADS=4
 ```
 
 ## Building and Testing

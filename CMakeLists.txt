@@ -15,6 +15,8 @@ option(AXI_TB_BUILD_TESTS "Build the self-contained test suite" ON)
 option(AXI_TB_ENABLE_TRACE "Enable VCD tracing for Verilated testbenches" OFF)
 option(AXI_TB_ENABLE_FST_TRACE
   "Enable FST tracing for Verilated testbenches" OFF)
+set(AXI_TB_THREADS "1" CACHE STRING
+  "Default number of threads in each generated Verilator model")
 option(AXI_TB_WARNINGS_AS_ERRORS "Treat warnings in handwritten C++ as errors" OFF)
 option(AXI_TB_BUILD_FUXI "Build the external Fuxi integration example" OFF)
 option(AXI_TB_FUXI_WITH_RISCV_TESTS

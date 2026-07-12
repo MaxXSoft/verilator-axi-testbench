@@ -7,6 +7,7 @@
 #define AXI_TB_ADDRESS_BITS @AXI_TB_ADDR_WIDTH@
 #define AXI_TB_DATA_BITS @AXI_TB_DATA_WIDTH@
 #define AXI_TB_ID_BITS @AXI_TB_ID_WIDTH@
+#define AXI_TB_THREADS @AXI_TB_THREADS@
 
 #define AXI_TB_ROM_BASE UINT64_C(@AXI_TB_ROM_BASE@)
 #define AXI_TB_ROM_SIZE UINT64_C(@AXI_TB_ROM_SIZE@)
@@ -27,6 +28,7 @@ inline constexpr std::size_t address_bits = AXI_TB_ADDRESS_BITS;
 inline constexpr std::size_t data_bits = AXI_TB_DATA_BITS;
 inline constexpr std::size_t data_bytes = data_bits / 8U;
 inline constexpr std::size_t id_bits = AXI_TB_ID_BITS;
+inline constexpr unsigned threads = AXI_TB_THREADS;
 
 inline constexpr std::uint64_t rom_base = AXI_TB_ROM_BASE;
 inline constexpr std::uint64_t rom_size = AXI_TB_ROM_SIZE;
@@ -44,5 +46,6 @@ static_assert(num_ports > 0);
 static_assert(address_bits == 32 || address_bits == 64);
 static_assert(data_bits == 32 || data_bits == 64 || data_bits == 128);
 static_assert(id_bits >= 1 && id_bits <= 32);
+static_assert(threads > 0);
 
 }  // namespace axi_tb::config

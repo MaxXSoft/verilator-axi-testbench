@@ -312,7 +312,12 @@ int run_simulation(int argc, char **argv, const Options &options) {
   VerilatedContext context;
   simulation_time = 0;
   context.commandArgs(argc, argv);
+  context.threads(axi_tb::config::threads);
   Vaxi_tb_dut top(&context);
+  if (top.threads() != axi_tb::config::threads) {
+    throw std::runtime_error(
+        "generated Verilator model thread count does not match configuration");
+  }
   Fabric fabric(address_space);
   fabric.set_seed(options.seed);
   fabric.set_stall_probability(options.stall_probability);

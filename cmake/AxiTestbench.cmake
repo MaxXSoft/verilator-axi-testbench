@@ -174,6 +174,7 @@ module name.
     ADDR_WIDTH   64
     DATA_WIDTH   64
     ID_WIDTH     4
+    THREADS      4
     ROM_BASE     0x00000000 ROM_SIZE  0x00010000
     RAM_BASE     0x80000000 RAM_SIZE  0x08000000
     UART_BASE    0x10000000 UART_SIZE 0x00000100
@@ -183,14 +184,19 @@ module name.
 ``CXX_SOURCES``, ``INCLUDE_DIRS``, and ``VERILATOR_ARGS`` are optional
 multi-value extensions. ``TRACE`` enables VCD for one target and ``TRACE_FST``
 enables FST; otherwise the matching global option is used. A target cannot
-enable both formats. ``EXIT_ADDRESS`` is accepted as an alias for
-``EXIT_BASE``.
+enable both formats. ``THREADS`` selects the generated Verilator model's
+thread count. ``EXIT_ADDRESS`` is accepted as an alias for ``EXIT_BASE``.
 #]=======================================================================]
 function(add_axi_testbench)
+  if(DEFINED AXI_TB_THREADS)
+    set(_default_threads "${AXI_TB_THREADS}")
+  else()
+    set(_default_threads 1)
+  endif()
   set(_options TRACE TRACE_FST)
   set(_one_value
     TARGET TOP
-    NUM_AXI ADDR_WIDTH DATA_WIDTH ID_WIDTH
+    NUM_AXI ADDR_WIDTH DATA_WIDTH ID_WIDTH THREADS
     ROM_BASE ROM_SIZE
     RAM_BASE RAM_SIZE
     UART_BASE UART_SIZE
@@ -222,6 +228,7 @@ function(add_axi_testbench)
   _axi_tb_default(ADDR_WIDTH 64)
   _axi_tb_default(DATA_WIDTH 64)
   _axi_tb_default(ID_WIDTH 4)
+  _axi_tb_default(THREADS "${_default_threads}")
   _axi_tb_default(ROM_BASE 0x00000000)
   _axi_tb_default(ROM_SIZE 0x00010000)
   _axi_tb_default(RAM_BASE 0x80000000)
@@ -259,6 +266,17 @@ function(add_axi_testbench)
     message(FATAL_ERROR
       "add_axi_testbench(${AXI_TB_TARGET}): ID_WIDTH must be in [1, 32]")
   endif()
+  if(NOT AXI_TB_THREADS MATCHES "^[1-9][0-9]*$")
+    message(FATAL_ERROR
+      "add_axi_testbench(${AXI_TB_TARGET}): THREADS must be positive")
+  endif()
+  foreach(_argument IN LISTS AXI_TB_VERILATOR_ARGS)
+    if(_argument MATCHES "^--threads($|[= ])")
+      message(FATAL_ERROR
+        "add_axi_testbench(${AXI_TB_TARGET}): use THREADS instead of passing "
+        "${_argument} through VERILATOR_ARGS")
+    endif()
+  endforeach()
   foreach(_address_argument
       ROM_BASE ROM_SIZE RAM_BASE RAM_SIZE UART_BASE UART_SIZE
       EXIT_BASE EXIT_SIZE)
@@ -365,11 +383,13 @@ function(add_axi_testbench)
     AXI_TB_LINKER_SCRIPT "${_generated_dir}/link.ld"
     AXI_TB_TOP_MODULE "${AXI_TB_TOP}"
     AXI_TB_NUM_PORTS "${AXI_TB_NUM_AXI}"
+    AXI_TB_THREADS "${AXI_TB_THREADS}"
   )
 
   verilate("${AXI_TB_TARGET}"
     PREFIX Vaxi_tb_dut
     TOP_MODULE "${AXI_TB_TOP}"
+    THREADS "${AXI_TB_THREADS}"
     DIRECTORY "${_verilated_dir}"
     SOURCES ${_rtl_sources}
     INCLUDE_DIRS "${AXI_TB_ROOT_DIR}/rtl" ${AXI_TB_INCLUDE_DIRS}
