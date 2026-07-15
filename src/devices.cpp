@@ -175,6 +175,7 @@ const AddressSpace::Mapping *AddressSpace::resolve(
 
 AddressSpace::Mapping *AddressSpace::resolve(std::uint64_t address,
                                              std::uint64_t length) noexcept {
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
   return const_cast<Mapping *>(std::as_const(*this).resolve(address, length));
 }
 
