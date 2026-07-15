@@ -17,9 +17,9 @@ class VerilatedAxiBinding {
   static_assert(AddressBits == 32 || AddressBits == 64);
   static_assert(DataBits == 32 || DataBits == 64 || DataBits == 128);
   static_assert(IdBits >= 1 && IdBits <= 32);
-  static constexpr std::size_t data_bytes = DataBits / 8U;
-  using Master = MasterSignals<data_bytes>;
-  using Slave = SlaveSignals<data_bytes>;
+  static constexpr std::size_t DATA_BYTES = DataBits / 8U;
+  using Master = MasterSignals<DATA_BYTES>;
+  using Slave = SlaveSignals<DATA_BYTES>;
 
   [[nodiscard]] static std::array<Master, NumPorts> sample(const Top &top) {
     std::array<Master, NumPorts> result{};
@@ -43,10 +43,10 @@ class VerilatedAxiBinding {
 
       value.w_valid = packed::bit(top.axi_w_valid, port);
       value.w.data =
-          packed::read_bytes<data_bytes>(top.axi_w_data, port * DataBits);
+          packed::read_bytes<DATA_BYTES>(top.axi_w_data, port * DataBits);
       const auto strobe =
-          packed::read_u64(top.axi_w_strb, port * data_bytes, data_bytes);
-      for (std::size_t lane = 0; lane < data_bytes; ++lane) {
+          packed::read_u64(top.axi_w_strb, port * DATA_BYTES, DATA_BYTES);
+      for (std::size_t lane = 0; lane < DATA_BYTES; ++lane) {
         value.w.strobe[lane] = (strobe >> lane) & 1U;
       }
       value.w.last = packed::bit(top.axi_w_last, port);

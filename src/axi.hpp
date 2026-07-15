@@ -10,17 +10,17 @@
 namespace axi_tb {
 
 enum class Response : std::uint8_t {
-  okay = 0,
-  exclusive_okay = 1,
-  slave_error = 2,
-  decode_error = 3,
+  Okay = 0,
+  ExclusiveOkay = 1,
+  SlaveError = 2,
+  DecodeError = 3,
 };
 
 enum class Burst : std::uint8_t {
-  fixed = 0,
-  increment = 1,
-  wrap = 2,
-  reserved = 3,
+  Fixed = 0,
+  Increment = 1,
+  Wrap = 2,
+  Reserved = 3,
 };
 
 class ProtocolError final : public std::runtime_error {
@@ -34,7 +34,7 @@ struct AddressPayload {
   std::uint64_t address = 0;
   std::uint8_t length = 0;
   std::uint8_t size = 0;
-  Burst burst = Burst::increment;
+  Burst burst = Burst::Increment;
   bool lock = false;
   std::uint8_t cache = 0;
   std::uint8_t protection = 0;
@@ -58,13 +58,13 @@ template <std::size_t DataBytes>
 struct ReadDataPayload {
   std::uint64_t id = 0;
   std::array<std::uint8_t, DataBytes> data{};
-  Response response = Response::okay;
+  Response response = Response::Okay;
   bool last = false;
 };
 
 struct WriteResponsePayload {
   std::uint64_t id = 0;
-  Response response = Response::okay;
+  Response response = Response::Okay;
   bool exit_response = false;
   std::uint32_t exit_code = 0;
 };
@@ -93,16 +93,16 @@ struct SlaveSignals {
 };
 
 constexpr Response combine_response(Response lhs, Response rhs) noexcept {
-  if (lhs == Response::decode_error || rhs == Response::decode_error) {
-    return Response::decode_error;
+  if (lhs == Response::DecodeError || rhs == Response::DecodeError) {
+    return Response::DecodeError;
   }
-  if (lhs == Response::slave_error || rhs == Response::slave_error) {
-    return Response::slave_error;
+  if (lhs == Response::SlaveError || rhs == Response::SlaveError) {
+    return Response::SlaveError;
   }
-  if (lhs == Response::exclusive_okay || rhs == Response::exclusive_okay) {
-    return Response::exclusive_okay;
+  if (lhs == Response::ExclusiveOkay || rhs == Response::ExclusiveOkay) {
+    return Response::ExclusiveOkay;
   }
-  return Response::okay;
+  return Response::Okay;
 }
 
 template <std::size_t Capacity, typename T>
@@ -192,14 +192,14 @@ class BurstCursor {
     const Wide aligned = start & ~static_cast<Wide>(beat_bytes_ - 1U);
     Wide result = start;
     switch (payload_.burst) {
-      case Burst::fixed:
+      case Burst::Fixed:
         result = start;
         break;
-      case Burst::increment:
+      case Burst::Increment:
         result = index == 0 ? start
                             : aligned + static_cast<Wide>(index) * beat_bytes_;
         break;
-      case Burst::wrap: {
+      case Burst::Wrap: {
         const Wide boundary = static_cast<Wide>(beats_) * beat_bytes_;
         const Wide base = start & ~(boundary - 1U);
         result =
@@ -207,7 +207,7 @@ class BurstCursor {
                     boundary);
         break;
       }
-      case Burst::reserved:
+      case Burst::Reserved:
         throw ProtocolError("reserved AXI burst type");
     }
     if (result > UINT64_MAX) {
@@ -260,13 +260,13 @@ class BurstCursor {
     if (beat_bytes_ > DataBytes) {
       throw ProtocolError("AXI AxSIZE exceeds the data bus width");
     }
-    if (payload_.burst == Burst::reserved) {
+    if (payload_.burst == Burst::Reserved) {
       throw ProtocolError("reserved AXI burst type");
     }
-    if (payload_.burst == Burst::fixed && beats_ > 16) {
+    if (payload_.burst == Burst::Fixed && beats_ > 16) {
       throw ProtocolError("AXI FIXED burst contains more than 16 beats");
     }
-    if (payload_.burst == Burst::wrap) {
+    if (payload_.burst == Burst::Wrap) {
       if (beats_ != 2 && beats_ != 4 && beats_ != 8 && beats_ != 16) {
         throw ProtocolError("AXI WRAP burst length is not 2, 4, 8, or 16");
       }

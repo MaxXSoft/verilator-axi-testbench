@@ -32,7 +32,7 @@ class Device {
     }
     std::ranges::fill(data, std::byte{0});
     if (data.empty()) {
-      return Response::okay;
+      return Response::Okay;
     }
     return read_impl(offset, data, enable);
   }
@@ -44,7 +44,7 @@ class Device {
       throw std::invalid_argument("device write data/strobe size mismatch");
     }
     if (data.empty()) {
-      return Response::okay;
+      return Response::Okay;
     }
     return write_impl(offset, data, strobe);
   }
@@ -55,7 +55,7 @@ class Device {
                                       std::span<const std::byte> data) {
     (void)offset;
     (void)data;
-    return Response::slave_error;
+    return Response::SlaveError;
   }
 
   [[nodiscard]] virtual bool loadable() const noexcept { return false; }
@@ -136,7 +136,7 @@ class AddressSpace {
 };
 
 [[nodiscard]] constexpr bool response_is_success(Response response) noexcept {
-  return response == Response::okay || response == Response::exclusive_okay;
+  return response == Response::Okay || response == Response::ExclusiveOkay;
 }
 
 }  // namespace axi_tb

@@ -104,10 +104,10 @@ Response AddressSpace::resolution_error(std::uint64_t address,
     const auto &candidate = *std::prev(position);
     if (address >= candidate.base && address < candidate.end()) {
       // The first byte was decoded, but the complete access did not fit.
-      return Response::slave_error;
+      return Response::SlaveError;
     }
   }
-  return Response::decode_error;
+  return Response::DecodeError;
 }
 
 Response AddressSpace::read(std::uint64_t address, std::span<std::byte> data,
@@ -117,7 +117,7 @@ Response AddressSpace::read(std::uint64_t address, std::span<std::byte> data,
   }
   std::ranges::fill(data, std::byte{0});
   if (data.empty()) {
-    return Response::okay;
+    return Response::Okay;
   }
   Mapping *mapping = resolve(address, data.size());
   if (mapping == nullptr) {
@@ -134,7 +134,7 @@ Response AddressSpace::write(std::uint64_t address,
         "address-space write data/strobe size mismatch");
   }
   if (data.empty()) {
-    return Response::okay;
+    return Response::Okay;
   }
   Mapping *mapping = resolve(address, data.size());
   if (mapping == nullptr) {
@@ -146,18 +146,18 @@ Response AddressSpace::write(std::uint64_t address,
 Response AddressSpace::load(std::uint64_t address,
                             std::span<const std::byte> data) {
   if (data.empty()) {
-    return Response::okay;
+    return Response::Okay;
   }
   Mapping *mapping = resolve(address, data.size());
   if (mapping == nullptr) {
     return resolution_error(address, data.size());
   }
   if (!mapping->device->loadable()) {
-    return Response::slave_error;
+    return Response::SlaveError;
   }
   const std::uint64_t offset = address - mapping->base;
   if (!mapping->device->can_load(offset, data.size())) {
-    return Response::slave_error;
+    return Response::SlaveError;
   }
   return mapping->device->load(offset, data);
 }
@@ -202,19 +202,19 @@ RomDevice::RomDevice(std::span<const std::byte> image, std::size_t size)
 Response RomDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
                               std::span<const std::uint8_t> enable) {
   if (!in_bounds(offset, data.size(), bytes_.size())) {
-    return Response::slave_error;
+    return Response::SlaveError;
   }
   const auto start = static_cast<std::size_t>(offset);
   if (all_lanes_enabled(enable)) {
     std::memcpy(data.data(), bytes_.data() + start, data.size());
-    return Response::okay;
+    return Response::Okay;
   }
   for (std::size_t lane = 0; lane < data.size(); ++lane) {
     if (enable[lane] != 0) {
       data[lane] = bytes_[start + lane];
     }
   }
-  return Response::okay;
+  return Response::Okay;
 }
 
 Response RomDevice::write_impl(std::uint64_t offset,
@@ -222,20 +222,20 @@ Response RomDevice::write_impl(std::uint64_t offset,
                                std::span<const std::uint8_t> strobe) {
   (void)strobe;
   if (!in_bounds(offset, data.size(), bytes_.size())) {
-    return Response::slave_error;
+    return Response::SlaveError;
   }
   // An AXI write transaction targeting ROM is an error, even if all WSTRB
   // lanes happen to be zero.
-  return Response::slave_error;
+  return Response::SlaveError;
 }
 
 Response RomDevice::load(std::uint64_t offset,
                          std::span<const std::byte> data) {
   if (!in_bounds(offset, data.size(), bytes_.size())) {
-    return Response::slave_error;
+    return Response::SlaveError;
   }
   std::ranges::copy(data, bytes_.data() + static_cast<std::size_t>(offset));
-  return Response::okay;
+  return Response::Okay;
 }
 
 bool RomDevice::can_load(std::uint64_t offset,
@@ -302,47 +302,47 @@ void RamDevice::release() noexcept {
 Response RamDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
                               std::span<const std::uint8_t> enable) {
   if (!in_bounds(offset, data.size(), size_)) {
-    return Response::slave_error;
+    return Response::SlaveError;
   }
   const auto start = static_cast<std::size_t>(offset);
   if (all_lanes_enabled(enable)) {
     std::memcpy(data.data(), data_ + start, data.size());
-    return Response::okay;
+    return Response::Okay;
   }
   for (std::size_t lane = 0; lane < data.size(); ++lane) {
     if (enable[lane] != 0) {
       data[lane] = data_[start + lane];
     }
   }
-  return Response::okay;
+  return Response::Okay;
 }
 
 Response RamDevice::write_impl(std::uint64_t offset,
                                std::span<const std::byte> data,
                                std::span<const std::uint8_t> strobe) {
   if (!in_bounds(offset, data.size(), size_)) {
-    return Response::slave_error;
+    return Response::SlaveError;
   }
   const auto start = static_cast<std::size_t>(offset);
   if (all_lanes_enabled(strobe)) {
     std::memcpy(data_ + start, data.data(), data.size());
-    return Response::okay;
+    return Response::Okay;
   }
   for (std::size_t lane = 0; lane < data.size(); ++lane) {
     if (strobe[lane] != 0) {
       data_[start + lane] = data[lane];
     }
   }
-  return Response::okay;
+  return Response::Okay;
 }
 
 Response RamDevice::load(std::uint64_t offset,
                          std::span<const std::byte> data) {
   if (!in_bounds(offset, data.size(), size_)) {
-    return Response::slave_error;
+    return Response::SlaveError;
   }
   std::ranges::copy(data, data_ + offset);
-  return Response::okay;
+  return Response::Okay;
 }
 
 bool RamDevice::can_load(std::uint64_t offset,
@@ -466,7 +466,7 @@ std::uint8_t UartDevice::interrupt_identification() const noexcept {
 std::uint8_t UartDevice::read_register(std::uint64_t index) {
   switch (index) {
     case 0: {
-      if ((line_control_ & lcr_dlab) != 0) {
+      if ((line_control_ & LCR_DLAB) != 0) {
         return divisor_low_;
       }
       if (receive_fifo_.empty()) {
@@ -477,7 +477,7 @@ std::uint8_t UartDevice::read_register(std::uint64_t index) {
       return value;
     }
     case 1:
-      return (line_control_ & lcr_dlab) != 0 ? divisor_high_
+      return (line_control_ & LCR_DLAB) != 0 ? divisor_high_
                                              : interrupt_enable_;
     case 2:
       return interrupt_identification();
@@ -487,8 +487,8 @@ std::uint8_t UartDevice::read_register(std::uint64_t index) {
       return modem_control_;
     case 5:
       return static_cast<std::uint8_t>(
-          lsr_thr_empty | lsr_transmitter_empty |
-          (receive_fifo_.empty() ? 0U : lsr_data_ready));
+          LSR_THR_EMPTY | LSR_TRANSMITTER_EMPTY |
+          (receive_fifo_.empty() ? 0U : LSR_DATA_READY));
     case 6:
       return 0;
     case 7:
@@ -501,7 +501,7 @@ std::uint8_t UartDevice::read_register(std::uint64_t index) {
 void UartDevice::write_register(std::uint64_t index, std::uint8_t value) {
   switch (index) {
     case 0:
-      if ((line_control_ & lcr_dlab) != 0) {
+      if ((line_control_ & LCR_DLAB) != 0) {
         divisor_low_ = value;
       } else {
         backend_write_(backend_context_, value);
@@ -509,7 +509,7 @@ void UartDevice::write_register(std::uint64_t index, std::uint8_t value) {
       }
       break;
     case 1:
-      if ((line_control_ & lcr_dlab) != 0) {
+      if ((line_control_ & LCR_DLAB) != 0) {
         divisor_high_ = value;
       } else {
         interrupt_enable_ = static_cast<std::uint8_t>(value & 0x0fU);
@@ -540,8 +540,8 @@ void UartDevice::write_register(std::uint64_t index, std::uint8_t value) {
 
 Response UartDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
                                std::span<const std::uint8_t> enable) {
-  if (!in_bounds(offset, data.size(), register_span)) {
-    return Response::slave_error;
+  if (!in_bounds(offset, data.size(), REGISTER_SPAN)) {
+    return Response::SlaveError;
   }
   poll_input();
   for (std::size_t lane = 0; lane < data.size(); ++lane) {
@@ -549,21 +549,21 @@ Response UartDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
       data[lane] = static_cast<std::byte>(read_register(offset + lane));
     }
   }
-  return Response::okay;
+  return Response::Okay;
 }
 
 Response UartDevice::write_impl(std::uint64_t offset,
                                 std::span<const std::byte> data,
                                 std::span<const std::uint8_t> strobe) {
-  if (!in_bounds(offset, data.size(), register_span)) {
-    return Response::slave_error;
+  if (!in_bounds(offset, data.size(), REGISTER_SPAN)) {
+    return Response::SlaveError;
   }
   for (std::size_t lane = 0; lane < data.size(); ++lane) {
     if (strobe[lane] != 0) {
       write_register(offset + lane, as_u8(data[lane]));
     }
   }
-  return Response::okay;
+  return Response::Okay;
 }
 
 ExitDevice::ExitDevice() noexcept = default;
@@ -575,8 +575,8 @@ void ExitDevice::clear() noexcept {
 
 Response ExitDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
                                std::span<const std::uint8_t> enable) {
-  if (!in_bounds(offset, data.size(), register_span)) {
-    return Response::slave_error;
+  if (!in_bounds(offset, data.size(), REGISTER_SPAN)) {
+    return Response::SlaveError;
   }
   for (std::size_t lane = 0; lane < data.size(); ++lane) {
     if (enable[lane] != 0) {
@@ -584,16 +584,16 @@ Response ExitDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
       data[lane] = static_cast<std::byte>((code_ >> shift) & 0xffU);
     }
   }
-  return Response::okay;
+  return Response::Okay;
 }
 
 Response ExitDevice::write_impl(std::uint64_t offset,
                                 std::span<const std::byte> data,
                                 std::span<const std::uint8_t> strobe) {
-  if (offset != 0 || data.size() != register_span ||
+  if (offset != 0 || data.size() != REGISTER_SPAN ||
       !std::ranges::all_of(strobe,
                            [](std::uint8_t value) { return value != 0; })) {
-    return Response::slave_error;
+    return Response::SlaveError;
   }
 
   code_ = static_cast<std::uint32_t>(as_u8(data[0])) |
@@ -602,7 +602,7 @@ Response ExitDevice::write_impl(std::uint64_t offset,
           (static_cast<std::uint32_t>(as_u8(data[3])) << 24U);
   requested_ = true;
   ++generation_;
-  return Response::okay;
+  return Response::Okay;
 }
 
 }  // namespace axi_tb

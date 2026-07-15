@@ -13,8 +13,8 @@ template <typename Signal>
 [[nodiscard]] std::uint32_t word(const Signal &signal, std::size_t index) {
   using Value = std::remove_cvref_t<Signal>;
   if constexpr (std::is_integral_v<Value>) {
-    constexpr std::size_t bits = sizeof(Value) * 8U;
-    if (index * 32U >= bits) {
+    constexpr std::size_t BITS = sizeof(Value) * 8U;
+    if (index * 32U >= BITS) {
       return 0;
     }
     using Unsigned = std::make_unsigned_t<Value>;
@@ -29,8 +29,8 @@ template <typename Signal>
 void set_word(Signal &signal, std::size_t index, std::uint32_t value) {
   using Value = std::remove_cvref_t<Signal>;
   if constexpr (std::is_integral_v<Value>) {
-    constexpr std::size_t bits = sizeof(Value) * 8U;
-    if (index * 32U >= bits) {
+    constexpr std::size_t BITS = sizeof(Value) * 8U;
+    if (index * 32U >= BITS) {
       throw std::out_of_range("packed signal word index");
     }
     using Unsigned = std::make_unsigned_t<Value>;

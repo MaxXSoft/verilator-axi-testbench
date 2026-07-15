@@ -12,15 +12,15 @@
 
 namespace {
 
-constexpr std::uint64_t kSeed = 0x51a7e5d3c9b28f04ULL;
-constexpr std::uint64_t kRamBase = 0x80000000ULL;
-constexpr std::size_t kRamSize = static_cast<std::size_t>(128) * 1024;
-constexpr std::size_t kPortCount = 2;
-constexpr std::size_t kTrafficCycles = 100'000;
-constexpr std::size_t kMaxBeats = 16;
+constexpr std::uint64_t SEED = 0x51a7e5d3c9b28f04ULL;
+constexpr std::uint64_t RAM_BASE = 0x80000000ULL;
+constexpr std::size_t RAM_SIZE = static_cast<std::size_t>(128) * 1024;
+constexpr std::size_t PORT_COUNT = 2;
+constexpr std::size_t TRAFFIC_CYCLES = 100'000;
+constexpr std::size_t MAX_BEATS = 16;
 
-using Fabric = axi_tb::AxiFabric<kPortCount, 64, 64, 4>;
-using Inputs = std::array<Fabric::Master, kPortCount>;
+using Fabric = axi_tb::AxiFabric<PORT_COUNT, 64, 64, 4>;
+using Inputs = std::array<Fabric::Master, PORT_COUNT>;
 
 [[noreturn]] void fail(const std::string &message) {
   throw std::runtime_error(message);
@@ -57,7 +57,7 @@ class Random {
 };
 
 struct Statistics {
-  std::array<std::size_t, kPortCount> port_transactions{};
+  std::array<std::size_t, PORT_COUNT> port_transactions{};
   std::array<std::size_t, 4> read_sizes{};
   std::array<std::size_t, 4> write_sizes{};
   std::size_t reads = 0;
@@ -76,7 +76,7 @@ struct Statistics {
 
 struct TransactionShape {
   axi_tb::AddressPayload address{};
-  axi_tb::BurstCursor<Fabric::data_bytes> cursor;
+  axi_tb::BurstCursor<Fabric::DATA_BYTES> cursor;
 
   explicit TransactionShape(const axi_tb::AddressPayload &value)
       : address(value), cursor(address) {}
@@ -84,23 +84,23 @@ struct TransactionShape {
 
 TransactionShape random_shape(std::size_t port, Random &random, std::uint8_t id,
                               Statistics &statistics) {
-  constexpr std::size_t partition_size = kRamSize / kPortCount;
-  constexpr std::size_t pages_per_partition = partition_size / 4096;
+  constexpr std::size_t PARTITION_SIZE = RAM_SIZE / PORT_COUNT;
+  constexpr std::size_t PAGES_PER_PARTITION = PARTITION_SIZE / 4096;
 
   axi_tb::AddressPayload address;
   address.id = id;
   address.size = static_cast<std::uint8_t>(random.below(4));
-  const std::size_t beats = 1 + random.below(kMaxBeats);
+  const std::size_t beats = 1 + random.below(MAX_BEATS);
   address.length = static_cast<std::uint8_t>(beats - 1);
-  address.burst = axi_tb::Burst::increment;
+  address.burst = axi_tb::Burst::Increment;
 
   const std::size_t beat_bytes = std::size_t{1} << address.size;
-  const std::size_t page = random.below(pages_per_partition);
+  const std::size_t page = random.below(PAGES_PER_PARTITION);
   const std::size_t last_aligned_start = 4096 - beats * beat_bytes;
   const std::size_t aligned_slots = last_aligned_start / beat_bytes + 1;
   const std::size_t aligned_offset = random.below(aligned_slots) * beat_bytes;
   const std::size_t unalignment = random.below(beat_bytes);
-  address.address = kRamBase + port * partition_size + page * 4096 +
+  address.address = RAM_BASE + port * PARTITION_SIZE + page * 4096 +
                     aligned_offset + unalignment;
   if (unalignment != 0) {
     ++statistics.unaligned_transactions;
@@ -113,8 +113,8 @@ TransactionShape random_shape(std::size_t port, Random &random, std::uint8_t id,
 
 struct WriteTransaction {
   axi_tb::AddressPayload address{};
-  axi_tb::BurstCursor<Fabric::data_bytes> cursor;
-  std::array<Fabric::WriteBeat, kMaxBeats> beats{};
+  axi_tb::BurstCursor<Fabric::DATA_BYTES> cursor;
+  std::array<Fabric::WriteBeat, MAX_BEATS> beats{};
   std::size_t beat_count = 0;
   std::size_t next_beat = 0;
   std::size_t aw_delay = 0;
@@ -138,7 +138,7 @@ struct WriteTransaction {
       auto &beat = beats[beat_index];
       const auto lanes = cursor.lane_mask(beat_index);
       bool all_legal_lanes_enabled = true;
-      for (std::size_t lane = 0; lane < Fabric::data_bytes; ++lane) {
+      for (std::size_t lane = 0; lane < Fabric::DATA_BYTES; ++lane) {
         beat.data[lane] = static_cast<std::uint8_t>(random.next());
         if (lanes[lane] != 0) {
           beat.strobe[lane] = random.chance(3, 4) ? 1U : 0U;
@@ -155,8 +155,8 @@ struct WriteTransaction {
 
 struct ReadTransaction {
   axi_tb::AddressPayload address{};
-  axi_tb::BurstCursor<Fabric::data_bytes> cursor;
-  std::array<std::array<std::uint8_t, Fabric::data_bytes>, kMaxBeats>
+  axi_tb::BurstCursor<Fabric::DATA_BYTES> cursor;
+  std::array<std::array<std::uint8_t, Fabric::DATA_BYTES>, MAX_BEATS>
       expected{};
   std::size_t next_beat = 0;
   std::size_t ar_delay = 0;
@@ -164,17 +164,17 @@ struct ReadTransaction {
   bool ar_done = false;
 
   ReadTransaction(const TransactionShape &shape,
-                  const std::array<std::uint8_t, kRamSize> &golden,
+                  const std::array<std::uint8_t, RAM_SIZE> &golden,
                   Random &random)
       : address(shape.address), cursor(address), ar_delay(random.below(5)) {
     for (std::size_t beat_index = 0; beat_index < cursor.beats();
          ++beat_index) {
       const auto base = cursor.bus_word_address(beat_index);
       const auto lanes = cursor.lane_mask(beat_index);
-      for (std::size_t lane = 0; lane < Fabric::data_bytes; ++lane) {
+      for (std::size_t lane = 0; lane < Fabric::DATA_BYTES; ++lane) {
         if (lanes[lane] != 0) {
           expected[beat_index][lane] =
-              golden[static_cast<std::size_t>(base + lane - kRamBase)];
+              golden[static_cast<std::size_t>(base + lane - RAM_BASE)];
         }
       }
     }
@@ -194,9 +194,9 @@ struct PortDriver {
 
 class StressHarness {
  public:
-  StressHarness() : ram_(kRamSize), fabric_(space_), random_(kSeed) {
-    space_.map(kRamBase, kRamSize, ram_, "stress-ram");
-    fabric_.set_seed(kSeed ^ 0xd1b54a32d192ed03ULL);
+  StressHarness() : ram_(RAM_SIZE), fabric_(space_), random_(SEED) {
+    space_.map(RAM_BASE, RAM_SIZE, ram_, "stress-ram");
+    fabric_.set_seed(SEED ^ 0xd1b54a32d192ed03ULL);
     fabric_.set_stall_probability(0.29);
   }
 
@@ -208,7 +208,7 @@ class StressHarness {
 
   void step(bool draining) {
     Inputs inputs{};
-    for (std::size_t port = 0; port < kPortCount; ++port) {
+    for (std::size_t port = 0; port < PORT_COUNT; ++port) {
       maybe_start(port, draining);
       drive_port(port, inputs[port], draining);
     }
@@ -216,7 +216,7 @@ class StressHarness {
     const auto outputs = fabric_.drive(false);
     fabric_.commit(inputs, false);
 
-    for (std::size_t port = 0; port < kPortCount; ++port) {
+    for (std::size_t port = 0; port < PORT_COUNT; ++port) {
       finish_cycle(port, inputs[port], outputs[port]);
     }
   }
@@ -231,12 +231,12 @@ class StressHarness {
   }
 
   void verify(std::size_t total_cycles) const {
-    require(total_cycles >= kTrafficCycles,
+    require(total_cycles >= TRAFFIC_CYCLES,
             "stress run did not reach 100000 traffic cycles");
     require(idle(), "fabric did not drain after randomized traffic");
     require(statistics_.reads != 0 && statistics_.writes != 0,
             "randomized run did not cover both reads and writes");
-    for (std::size_t port = 0; port < kPortCount; ++port) {
+    for (std::size_t port = 0; port < PORT_COUNT; ++port) {
       require(statistics_.port_transactions[port] != 0,
               "one AXI port generated no traffic");
     }
@@ -389,7 +389,7 @@ class StressHarness {
     }
     require(output.b.id == transaction.address.id,
             "write response ID mismatch");
-    require(output.b.response == axi_tb::Response::okay,
+    require(output.b.response == axi_tb::Response::Okay,
             "RAM write returned a non-OKAY response");
     if (!input.b_ready) {
       ++statistics_.b_stalls;
@@ -420,7 +420,7 @@ class StressHarness {
       return;
     }
     require(output.r.id == transaction.address.id, "read response ID mismatch");
-    require(output.r.response == axi_tb::Response::okay,
+    require(output.r.response == axi_tb::Response::Okay,
             "RAM read returned a non-OKAY response");
     require(output.r.last ==
                 (transaction.next_beat + 1 == transaction.cursor.beats()),
@@ -431,7 +431,7 @@ class StressHarness {
     }
 
     const auto &expected = transaction.expected[transaction.next_beat];
-    for (std::size_t lane = 0; lane < Fabric::data_bytes; ++lane) {
+    for (std::size_t lane = 0; lane < Fabric::DATA_BYTES; ++lane) {
       if (output.r.data[lane] != expected[lane]) {
         std::ostringstream message;
         message << "read data mismatch on port " << port << ", beat "
@@ -452,9 +452,9 @@ class StressHarness {
       const auto base = transaction.cursor.bus_word_address(beat_index);
       const auto lanes = transaction.cursor.lane_mask(beat_index);
       const auto &beat = transaction.beats[beat_index];
-      for (std::size_t lane = 0; lane < Fabric::data_bytes; ++lane) {
+      for (std::size_t lane = 0; lane < Fabric::DATA_BYTES; ++lane) {
         if (lanes[lane] != 0 && beat.strobe[lane] != 0) {
-          golden_[static_cast<std::size_t>(base + lane - kRamBase)] =
+          golden_[static_cast<std::size_t>(base + lane - RAM_BASE)] =
               beat.data[lane];
         }
       }
@@ -465,8 +465,8 @@ class StressHarness {
   axi_tb::AddressSpace space_;
   Fabric fabric_;
   Random random_;
-  std::array<std::uint8_t, kRamSize> golden_{};
-  std::array<PortDriver, kPortCount> ports_{};
+  std::array<std::uint8_t, RAM_SIZE> golden_{};
+  std::array<PortDriver, PORT_COUNT> ports_{};
   Statistics statistics_{};
 };
 
@@ -477,21 +477,21 @@ int main() {
     StressHarness harness;
     harness.reset();
 
-    for (std::size_t cycle = 0; cycle < kTrafficCycles; ++cycle) {
+    for (std::size_t cycle = 0; cycle < TRAFFIC_CYCLES; ++cycle) {
       harness.step(false);
     }
 
-    constexpr std::size_t max_drain_cycles = 10'000;
+    constexpr std::size_t MAX_DRAIN_CYCLES = 10'000;
     std::size_t drain_cycles = 0;
-    while (!harness.idle() && drain_cycles < max_drain_cycles) {
+    while (!harness.idle() && drain_cycles < MAX_DRAIN_CYCLES) {
       harness.step(true);
       ++drain_cycles;
     }
-    harness.verify(kTrafficCycles + drain_cycles);
+    harness.verify(TRAFFIC_CYCLES + drain_cycles);
 
     const auto &statistics = harness.statistics();
-    std::cout << "fabric differential stress passed: seed=" << kSeed
-              << ", traffic_cycles=" << kTrafficCycles
+    std::cout << "fabric differential stress passed: seed=" << SEED
+              << ", traffic_cycles=" << TRAFFIC_CYCLES
               << ", drain_cycles=" << drain_cycles
               << ", reads=" << statistics.reads
               << ", writes=" << statistics.writes << '\n';

@@ -37,7 +37,7 @@ axi_tb::AddressPayload address(std::uint32_t value, std::uint8_t id = 0,
   result.id = id;
   result.address = value;
   result.size = 2;
-  result.burst = axi_tb::Burst::increment;
+  result.burst = axi_tb::Burst::Increment;
   result.lock = exclusive;
   return result;
 }
@@ -123,7 +123,7 @@ void write_burst(Fabric &fabric, Inputs &inputs, std::size_t port,
     ++wait_cycles;
   } while (!outputs[port].b_valid && wait_cycles <= BeatCount + 2);
   check(outputs[port].b_valid &&
-            outputs[port].b.response == axi_tb::Response::okay,
+            outputs[port].b.response == axi_tb::Response::Okay,
         "burst write returns OKAY");
   inputs[port].b_ready = true;
   tick(fabric, inputs);
@@ -272,14 +272,14 @@ void test_fixed_wrap_and_reset() {
   tick(fabric, inputs, true);
 
   auto fixed = address(0x1000, 1);
-  fixed.burst = axi_tb::Burst::fixed;
+  fixed.burst = axi_tb::Burst::Fixed;
   write_burst(fabric, inputs, 0, fixed,
               std::array<std::uint32_t, 3>{0x11111111, 0x22222222, 0x33333333});
   check(ram_word(ram, 0) == 0x33333333,
         "FIXED burst repeatedly updates one transfer address");
 
   auto wrap = address(0x101c, 2);
-  wrap.burst = axi_tb::Burst::wrap;
+  wrap.burst = axi_tb::Burst::Wrap;
   write_burst(fabric, inputs, 0, wrap,
               std::array<std::uint32_t, 4>{0xaaaaaaaa, 0xbbbbbbbb, 0xcccccccc,
                                            0xdddddddd});
@@ -338,7 +338,7 @@ int main() {
   inputs[0].aw = address(0x1000, 3);
   check(tick(fabric, inputs)[0].aw_ready, "late AW is accepted");
   inputs[0].aw_valid = false;
-  consume_b(fabric, inputs, 0, axi_tb::Response::okay);
+  consume_b(fabric, inputs, 0, axi_tb::Response::Okay);
 
   const auto first_read = read_single(fabric, inputs, 0, 0x1000, 3);
   check(first_read.id == 3 && first_read.last,
@@ -347,9 +347,9 @@ int main() {
 
   // ROM writes and unmapped reads return protocol responses without mutation.
   write_single(fabric, inputs, 0, 0x0000, 0xaabbccdd);
-  consume_b(fabric, inputs, 0, axi_tb::Response::slave_error);
+  consume_b(fabric, inputs, 0, axi_tb::Response::SlaveError);
   const auto missing = read_single(fabric, inputs, 1, 0x4000, 7);
-  check(missing.response == axi_tb::Response::decode_error &&
+  check(missing.response == axi_tb::Response::DecodeError &&
             word_value(missing) == 0,
         "unmapped read returns DECERR and zero data");
 
@@ -378,10 +378,10 @@ int main() {
 
   // A matching exclusive read/write succeeds.
   const auto exclusive_read = read_single(fabric, inputs, 0, 0x1004, 9, true);
-  check(exclusive_read.response == axi_tb::Response::exclusive_okay,
+  check(exclusive_read.response == axi_tb::Response::ExclusiveOkay,
         "exclusive read returns EXOKAY");
   write_single(fabric, inputs, 0, 0x1004, 0x55667788, 9, true);
-  consume_b(fabric, inputs, 0, axi_tb::Response::exclusive_okay);
+  consume_b(fabric, inputs, 0, axi_tb::Response::ExclusiveOkay);
   check(word_value(read_single(fabric, inputs, 0, 0x1004)) == 0x55667788,
         "successful exclusive write commits");
 
@@ -389,9 +389,9 @@ int main() {
   // write returns OKAY and does not update memory.
   read_single(fabric, inputs, 0, 0x1008, 10, true);
   write_single(fabric, inputs, 1, 0x1008, 0x01020304, 2, false);
-  consume_b(fabric, inputs, 1, axi_tb::Response::okay);
+  consume_b(fabric, inputs, 1, axi_tb::Response::Okay);
   write_single(fabric, inputs, 0, 0x1008, 0xdeadbeef, 10, true);
-  consume_b(fabric, inputs, 0, axi_tb::Response::okay);
+  consume_b(fabric, inputs, 0, axi_tb::Response::Okay);
   check(word_value(read_single(fabric, inputs, 0, 0x1008)) == 0x01020304,
         "failed exclusive write has no side effect");
 

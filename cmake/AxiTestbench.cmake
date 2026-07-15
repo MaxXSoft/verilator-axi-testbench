@@ -71,59 +71,60 @@ function(_axi_tb_validate_address_map)
 #include <cstdint>
 #include <limits>
 
-constexpr std::uint64_t rom_base = static_cast<std::uint64_t>(]=]
+constexpr std::uint64_t ROM_BASE = static_cast<std::uint64_t>(]=]
     "${AXI_TB_ROM_BASE}ULL);\n"
-    "constexpr std::uint64_t rom_size = static_cast<std::uint64_t>(${AXI_TB_ROM_SIZE}ULL);\n"
-    "constexpr std::uint64_t ram_base = static_cast<std::uint64_t>(${AXI_TB_RAM_BASE}ULL);\n"
-    "constexpr std::uint64_t ram_size = static_cast<std::uint64_t>(${AXI_TB_RAM_SIZE}ULL);\n"
-    "constexpr std::uint64_t uart_base = static_cast<std::uint64_t>(${AXI_TB_UART_BASE}ULL);\n"
-    "constexpr std::uint64_t uart_size = static_cast<std::uint64_t>(${AXI_TB_UART_SIZE}ULL);\n"
-    "constexpr std::uint64_t exit_base = static_cast<std::uint64_t>(${AXI_TB_EXIT_BASE}ULL);\n"
-    "constexpr std::uint64_t exit_size = static_cast<std::uint64_t>(${AXI_TB_EXIT_SIZE}ULL);\n"
-    "constexpr unsigned address_bits = ${AXI_TB_ADDR_WIDTH};\n"
+    "constexpr std::uint64_t ROM_SIZE = static_cast<std::uint64_t>(${AXI_TB_ROM_SIZE}ULL);\n"
+    "constexpr std::uint64_t RAM_BASE = static_cast<std::uint64_t>(${AXI_TB_RAM_BASE}ULL);\n"
+    "constexpr std::uint64_t RAM_SIZE = static_cast<std::uint64_t>(${AXI_TB_RAM_SIZE}ULL);\n"
+    "constexpr std::uint64_t UART_BASE = static_cast<std::uint64_t>(${AXI_TB_UART_BASE}ULL);\n"
+    "constexpr std::uint64_t UART_SIZE = static_cast<std::uint64_t>(${AXI_TB_UART_SIZE}ULL);\n"
+    "constexpr std::uint64_t EXIT_BASE = static_cast<std::uint64_t>(${AXI_TB_EXIT_BASE}ULL);\n"
+    "constexpr std::uint64_t EXIT_SIZE = static_cast<std::uint64_t>(${AXI_TB_EXIT_SIZE}ULL);\n"
+    "constexpr unsigned ADDRESS_BITS = ${AXI_TB_ADDR_WIDTH};\n"
     [=[
-constexpr std::uint64_t max_value =
+constexpr std::uint64_t MAX_VALUE =
     std::numeric_limits<std::uint64_t>::max();
 
-static_assert(rom_size != 0, "ROM_SIZE must be positive");
-static_assert(ram_size != 0, "RAM_SIZE must be positive");
-static_assert(uart_size != 0, "UART_SIZE must be positive");
-static_assert(exit_size != 0, "EXIT_SIZE must be positive");
-static_assert(rom_size <= max_value - rom_base, "ROM range overflows uint64");
-static_assert(ram_size <= max_value - ram_base, "RAM range overflows uint64");
-static_assert(uart_size <= max_value - uart_base, "UART range overflows uint64");
-static_assert(exit_size <= max_value - exit_base, "EXIT range overflows uint64");
+static_assert(ROM_SIZE != 0, "ROM_SIZE must be positive");
+static_assert(RAM_SIZE != 0, "RAM_SIZE must be positive");
+static_assert(UART_SIZE != 0, "UART_SIZE must be positive");
+static_assert(EXIT_SIZE != 0, "EXIT_SIZE must be positive");
+static_assert(ROM_SIZE <= MAX_VALUE - ROM_BASE, "ROM range overflows uint64");
+static_assert(RAM_SIZE <= MAX_VALUE - RAM_BASE, "RAM range overflows uint64");
+static_assert(UART_SIZE <= MAX_VALUE - UART_BASE, "UART range overflows uint64");
+static_assert(EXIT_SIZE <= MAX_VALUE - EXIT_BASE,
+              "EXIT range overflows uint64");
 
-constexpr std::uint64_t rom_end = rom_base + rom_size;
-constexpr std::uint64_t ram_end = ram_base + ram_size;
-constexpr std::uint64_t uart_end = uart_base + uart_size;
-constexpr std::uint64_t exit_end = exit_base + exit_size;
-constexpr std::uint64_t limit32 = UINT64_C(0x100000000);
+constexpr std::uint64_t ROM_END = ROM_BASE + ROM_SIZE;
+constexpr std::uint64_t RAM_END = RAM_BASE + RAM_SIZE;
+constexpr std::uint64_t UART_END = UART_BASE + UART_SIZE;
+constexpr std::uint64_t EXIT_END = EXIT_BASE + EXIT_SIZE;
+constexpr std::uint64_t LIMIT32 = UINT64_C(0x100000000);
 
-static_assert(address_bits == 64 || rom_end <= limit32,
+static_assert(ADDRESS_BITS == 64 || ROM_END <= LIMIT32,
               "ROM range does not fit ADDR_WIDTH=32");
-static_assert(address_bits == 64 || ram_end <= limit32,
+static_assert(ADDRESS_BITS == 64 || RAM_END <= LIMIT32,
               "RAM range does not fit ADDR_WIDTH=32");
-static_assert(address_bits == 64 || uart_end <= limit32,
+static_assert(ADDRESS_BITS == 64 || UART_END <= LIMIT32,
               "UART range does not fit ADDR_WIDTH=32");
-static_assert(address_bits == 64 || exit_end <= limit32,
+static_assert(ADDRESS_BITS == 64 || EXIT_END <= LIMIT32,
               "EXIT range does not fit ADDR_WIDTH=32");
 
 constexpr bool overlap(std::uint64_t lhs_base, std::uint64_t lhs_end,
                        std::uint64_t rhs_base, std::uint64_t rhs_end) {
   return lhs_base < rhs_end && rhs_base < lhs_end;
 }
-static_assert(!overlap(rom_base, rom_end, ram_base, ram_end),
+static_assert(!overlap(ROM_BASE, ROM_END, RAM_BASE, RAM_END),
               "ROM and RAM ranges overlap");
-static_assert(!overlap(rom_base, rom_end, uart_base, uart_end),
+static_assert(!overlap(ROM_BASE, ROM_END, UART_BASE, UART_END),
               "ROM and UART ranges overlap");
-static_assert(!overlap(rom_base, rom_end, exit_base, exit_end),
+static_assert(!overlap(ROM_BASE, ROM_END, EXIT_BASE, EXIT_END),
               "ROM and EXIT ranges overlap");
-static_assert(!overlap(ram_base, ram_end, uart_base, uart_end),
+static_assert(!overlap(RAM_BASE, RAM_END, UART_BASE, UART_END),
               "RAM and UART ranges overlap");
-static_assert(!overlap(ram_base, ram_end, exit_base, exit_end),
+static_assert(!overlap(RAM_BASE, RAM_END, EXIT_BASE, EXIT_END),
               "RAM and EXIT ranges overlap");
-static_assert(!overlap(uart_base, uart_end, exit_base, exit_end),
+static_assert(!overlap(UART_BASE, UART_END, EXIT_BASE, EXIT_END),
               "UART and EXIT ranges overlap");
 
 int main() { return 0; }

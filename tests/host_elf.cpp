@@ -61,15 +61,15 @@ std::vector<std::byte> make_elf32() {
   put_le<std::uint32_t>(image, 52 + 28, 0x100);
 
   // Writable RAM segment.
-  constexpr std::size_t second = 52 + 32;
-  put_le<std::uint32_t>(image, second + 0, 1);
-  put_le<std::uint32_t>(image, second + 4, 0x110);
-  put_le<std::uint32_t>(image, second + 8, 0x8000);
-  put_le<std::uint32_t>(image, second + 12, 0x8000);
-  put_le<std::uint32_t>(image, second + 16, 3);
-  put_le<std::uint32_t>(image, second + 20, 5);
-  put_le<std::uint32_t>(image, second + 24, 6);
-  put_le<std::uint32_t>(image, second + 28, 1);
+  constexpr std::size_t SECOND = 52 + 32;
+  put_le<std::uint32_t>(image, SECOND + 0, 1);
+  put_le<std::uint32_t>(image, SECOND + 4, 0x110);
+  put_le<std::uint32_t>(image, SECOND + 8, 0x8000);
+  put_le<std::uint32_t>(image, SECOND + 12, 0x8000);
+  put_le<std::uint32_t>(image, SECOND + 16, 3);
+  put_le<std::uint32_t>(image, SECOND + 20, 5);
+  put_le<std::uint32_t>(image, SECOND + 24, 6);
+  put_le<std::uint32_t>(image, SECOND + 28, 1);
 
   image[0x100] = std::byte{0x13};
   image[0x101] = std::byte{0x05};
@@ -126,10 +126,10 @@ void test_elf32() {
   space.map(0, rom.size(), rom, "rom");
   space.map(0x8000, ram.size(), ram, "ram");
 
-  const std::array<std::byte, 4> dirty{std::byte{0xff}, std::byte{0xff},
+  const std::array<std::byte, 4> DIRTY{std::byte{0xff}, std::byte{0xff},
                                        std::byte{0xff}, std::byte{0xff}};
-  assert(rom.load(0x104, dirty) == Response::okay);
-  assert(ram.load(3, dirty) == Response::okay);
+  assert(rom.load(0x104, DIRTY) == Response::Okay);
+  assert(ram.load(3, DIRTY) == Response::Okay);
 
   const auto image = make_elf32();
   const auto result = axi_tb::load_elf(image, space);
@@ -152,21 +152,21 @@ void test_elf32() {
   assert(ram.bytes()[3] == std::byte{0});
   assert(ram.bytes()[4] == std::byte{0});
 
-  const std::array<std::byte, 3> raw{std::byte{9}, std::byte{8}, std::byte{7}};
-  axi_tb::load_raw_image(raw, space, 0x8010);
+  const std::array<std::byte, 3> RAW{std::byte{9}, std::byte{8}, std::byte{7}};
+  axi_tb::load_raw_image(RAW, space, 0x8010);
   assert(ram.bytes()[0x10] == std::byte{9});
   assert(ram.bytes()[0x11] == std::byte{8});
   assert(ram.bytes()[0x12] == std::byte{7});
-  expect_elf_error([&] { axi_tb::load_raw_image(raw, space, 0x80ff); });
+  expect_elf_error([&] { axi_tb::load_raw_image(RAW, space, 0x80ff); });
 }
 
 void test_elf64_and_path_loader() {
   RamDevice ram(0x100);
   AddressSpace space;
   space.map(0x9000, ram.size(), ram, "ram64");
-  const std::array<std::byte, 4> dirty{std::byte{0xff}, std::byte{0xff},
+  const std::array<std::byte, 4> DIRTY{std::byte{0xff}, std::byte{0xff},
                                        std::byte{0xff}, std::byte{0xff}};
-  assert(ram.load(4, dirty) == Response::okay);
+  assert(ram.load(4, DIRTY) == Response::Okay);
 
   const auto image = make_elf64();
   const auto result = axi_tb::load_elf(image, space);
@@ -228,11 +228,11 @@ void test_malformed_images_are_rejected_atomically() {
   // The second segment overlaps the first.  Mark the first destination before
   // calling the loader to prove that complete validation precedes all writes.
   auto overlap = make_elf32();
-  constexpr std::size_t second = 52 + 32;
-  put_le<std::uint32_t>(overlap, second + 8, 0x104);
-  put_le<std::uint32_t>(overlap, second + 12, 0x104);
-  const std::array<std::byte, 1> marker{std::byte{0x77}};
-  assert(rom.load(0x100, marker) == Response::okay);
+  constexpr std::size_t SECOND = 52 + 32;
+  put_le<std::uint32_t>(overlap, SECOND + 8, 0x104);
+  put_le<std::uint32_t>(overlap, SECOND + 12, 0x104);
+  const std::array<std::byte, 1> MARKER{std::byte{0x77}};
+  assert(rom.load(0x100, MARKER) == Response::Okay);
   expect_elf_error([&] { (void)axi_tb::load_elf(overlap, space); });
   assert(rom.bytes()[0x100] == std::byte{0x77});
 

@@ -12,11 +12,11 @@
 namespace axi_tb {
 namespace {
 
-constexpr std::uint32_t pt_load = 1;
-constexpr std::uint8_t elf_class_32 = 1;
-constexpr std::uint8_t elf_class_64 = 2;
-constexpr std::uint8_t elf_data_little_endian = 1;
-constexpr std::uint8_t elf_version_current = 1;
+constexpr std::uint32_t PT_LOAD = 1;
+constexpr std::uint8_t ELF_CLASS_32 = 1;
+constexpr std::uint8_t ELF_CLASS_64 = 2;
+constexpr std::uint8_t ELF_DATA_LITTLE_ENDIAN = 1;
+constexpr std::uint8_t ELF_VERSION_CURRENT = 1;
 
 struct ParsedSegment {
   ElfSegment public_segment;
@@ -141,12 +141,12 @@ void apply_segment(std::span<const std::byte> image,
 
   std::uint64_t zero_address = info.load_address + info.file_size;
   std::uint64_t remaining = info.memory_size - info.file_size;
-  constexpr std::array<std::byte, 4096> zeros{};
+  constexpr std::array<std::byte, 4096> ZEROS{};
   while (remaining != 0) {
     const std::size_t count = static_cast<std::size_t>(
-        std::min<std::uint64_t>(remaining, zeros.size()));
+        std::min<std::uint64_t>(remaining, ZEROS.size()));
     if (!response_is_success(address_space.load(
-            zero_address, std::span<const std::byte>(zeros).first(count)))) {
+            zero_address, std::span<const std::byte>(ZEROS).first(count)))) {
       throw ElfError("device rejected PT_LOAD BSS at " +
                      hexadecimal(zero_address));
     }
@@ -163,24 +163,24 @@ void apply_segment(std::span<const std::byte> image,
   }
 
   const auto elf_class = std::to_integer<std::uint8_t>(image[4]);
-  if (elf_class != elf_class_32 && elf_class != elf_class_64) {
+  if (elf_class != ELF_CLASS_32 && elf_class != ELF_CLASS_64) {
     throw ElfError("unsupported ELF class (expected ELF32 or ELF64)");
   }
-  if (std::to_integer<std::uint8_t>(image[5]) != elf_data_little_endian) {
+  if (std::to_integer<std::uint8_t>(image[5]) != ELF_DATA_LITTLE_ENDIAN) {
     throw ElfError("only little-endian ELF images are supported");
   }
-  if (std::to_integer<std::uint8_t>(image[6]) != elf_version_current) {
+  if (std::to_integer<std::uint8_t>(image[6]) != ELF_VERSION_CURRENT) {
     throw ElfError("unsupported ELF identification version");
   }
 
   ParsedHeader header;
-  header.is_64_bit = elf_class == elf_class_64;
+  header.is_64_bit = elf_class == ELF_CLASS_64;
   const std::uint64_t header_size = header.is_64_bit ? 64U : 52U;
   header.program_header_size = header.is_64_bit ? 56U : 32U;
   require_range(0, header_size, image.size(), "header");
 
   const auto version = read_little_endian<std::uint32_t>(image, 20, "version");
-  if (version != elf_version_current) {
+  if (version != ELF_VERSION_CURRENT) {
     throw ElfError("unsupported ELF header version");
   }
 
@@ -230,7 +230,7 @@ void apply_segment(std::span<const std::byte> image,
                   "program-header offset");
   const auto type =
       read_little_endian<std::uint32_t>(image, offset, "segment type");
-  if (type != pt_load) {
+  if (type != PT_LOAD) {
     return std::nullopt;
   }
 

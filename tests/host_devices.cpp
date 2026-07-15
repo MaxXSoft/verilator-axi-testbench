@@ -68,43 +68,43 @@ void test_address_space_and_memories() {
   }
   assert(overlap_was_rejected);
 
-  const auto image = byte_array<4>({0x11, 0x22, 0x33, 0x44});
-  assert(rom.load(4, image) == Response::okay);
+  const auto IMAGE = byte_array<4>({0x11, 0x22, 0x33, 0x44});
+  assert(rom.load(4, IMAGE) == Response::Okay);
   std::array<std::byte, 4> read_data{std::byte{0xff}, std::byte{0xff},
                                      std::byte{0xff}, std::byte{0xff}};
-  const std::array<std::uint8_t, 4> sparse_enable{1, 0, 1, 0};
-  assert(space.read(4, read_data, sparse_enable) == Response::okay);
+  const std::array<std::uint8_t, 4> SPARSE_ENABLE{1, 0, 1, 0};
+  assert(space.read(4, read_data, SPARSE_ENABLE) == Response::Okay);
   assert(read_data[0] == std::byte{0x11});
   assert(read_data[1] == std::byte{0});
   assert(read_data[2] == std::byte{0x33});
   assert(read_data[3] == std::byte{0});
 
-  const std::array<std::uint8_t, 4> all_lanes{1, 1, 1, 1};
-  assert(space.write(4, image, all_lanes) == Response::slave_error);
-  assert(space.read(4, read_data, all_lanes) == Response::okay);
-  assert(read_data == image);
+  const std::array<std::uint8_t, 4> ALL_LANES{1, 1, 1, 1};
+  assert(space.write(4, IMAGE, ALL_LANES) == Response::SlaveError);
+  assert(space.read(4, read_data, ALL_LANES) == Response::Okay);
+  assert(read_data == IMAGE);
 
   read_data.fill(std::byte{0xcc});
-  assert(space.read(14, read_data, all_lanes) == Response::slave_error);
+  assert(space.read(14, read_data, ALL_LANES) == Response::SlaveError);
   for (const std::byte value : read_data) {
     assert(value == std::byte{0});
   }
-  assert(space.read(0x900, read_data, all_lanes) == Response::decode_error);
+  assert(space.read(0x900, read_data, ALL_LANES) == Response::DecodeError);
 
-  const auto ram_write = byte_array<4>({0xaa, 0xbb, 0xcc, 0xdd});
-  assert(space.write(0x1000, ram_write, sparse_enable) == Response::okay);
-  assert(space.read(0x1000, read_data, all_lanes) == Response::okay);
+  const auto RAM_WRITE = byte_array<4>({0xaa, 0xbb, 0xcc, 0xdd});
+  assert(space.write(0x1000, RAM_WRITE, SPARSE_ENABLE) == Response::Okay);
+  assert(space.read(0x1000, read_data, ALL_LANES) == Response::Okay);
   assert(read_data[0] == std::byte{0xaa});
   assert(read_data[1] == std::byte{0});
   assert(read_data[2] == std::byte{0xcc});
   assert(read_data[3] == std::byte{0});
 
-  const std::array<std::byte, 1> last_byte{std::byte{0x5a}};
-  const std::array<std::uint8_t, 1> one_lane{1};
+  const std::array<std::byte, 1> LAST_BYTE{std::byte{0x5a}};
+  const std::array<std::uint8_t, 1> ONE_LANE{1};
   const std::uint64_t last_address = 0x1000 + ram.size() - 1;
-  assert(space.write(last_address, last_byte, one_lane) == Response::okay);
+  assert(space.write(last_address, LAST_BYTE, ONE_LANE) == Response::Okay);
   std::array<std::byte, 1> last_read{};
-  assert(space.read(last_address, last_read, one_lane) == Response::okay);
+  assert(space.read(last_address, last_read, ONE_LANE) == Response::Okay);
   assert(last_read[0] == std::byte{0x5a});
 
   assert(rom.supports_burst());
@@ -116,7 +116,7 @@ void test_address_space_and_memories() {
 
   bool size_mismatch_was_rejected = false;
   try {
-    (void)space.read(0, read_data, one_lane);
+    (void)space.read(0, read_data, ONE_LANE);
   } catch (const std::invalid_argument &) {
     size_mismatch_was_rejected = true;
   }
@@ -129,58 +129,58 @@ void test_address_space_and_memories() {
 void test_uart() {
   BufferUartBackend backend;
   UartDevice uart(backend);
-  const std::array<std::uint8_t, 1> enabled{1};
-  const std::array<std::uint8_t, 1> disabled{0};
+  const std::array<std::uint8_t, 1> ENABLED{1};
+  const std::array<std::uint8_t, 1> DISABLED{0};
   std::array<std::byte, 1> value{};
 
-  assert(uart.read(5, value, enabled) == Response::okay);
+  assert(uart.read(5, value, ENABLED) == Response::Okay);
   assert(std::to_integer<std::uint8_t>(value[0]) == 0x60);
-  assert(uart.read(2, value, enabled) == Response::okay);
+  assert(uart.read(2, value, ENABLED) == Response::Okay);
   assert(std::to_integer<std::uint8_t>(value[0]) == 0x01);
 
   backend.push_input(static_cast<std::uint8_t>('A'));
   backend.push_input(static_cast<std::uint8_t>('B'));
-  assert(uart.read(5, value, enabled) == Response::okay);
+  assert(uart.read(5, value, ENABLED) == Response::Okay);
   assert((std::to_integer<std::uint8_t>(value[0]) & 0x01U) != 0);
-  assert(uart.read(0, value, enabled) == Response::okay);
+  assert(uart.read(0, value, ENABLED) == Response::Okay);
   assert(value[0] == std::byte{'A'});
-  assert(uart.read(5, value, enabled) == Response::okay);
+  assert(uart.read(5, value, ENABLED) == Response::Okay);
   assert((std::to_integer<std::uint8_t>(value[0]) & 0x01U) != 0);
 
-  const std::array<std::byte, 1> enable_rx_interrupt{std::byte{1}};
-  assert(uart.write(1, enable_rx_interrupt, enabled) == Response::okay);
-  assert(uart.read(2, value, enabled) == Response::okay);
+  const std::array<std::byte, 1> ENABLE_RX_INTERRUPT{std::byte{1}};
+  assert(uart.write(1, ENABLE_RX_INTERRUPT, ENABLED) == Response::Okay);
+  assert(uart.read(2, value, ENABLED) == Response::Okay);
   assert((std::to_integer<std::uint8_t>(value[0]) & 0x0fU) == 0x04U);
-  assert(uart.read(0, value, enabled) == Response::okay);
+  assert(uart.read(0, value, ENABLED) == Response::Okay);
   assert(value[0] == std::byte{'B'});
 
-  const std::array<std::byte, 1> set_dlab{std::byte{0x80}};
-  const std::array<std::byte, 1> divisor_low{std::byte{0x34}};
-  const std::array<std::byte, 1> divisor_high{std::byte{0x12}};
-  assert(uart.write(3, set_dlab, enabled) == Response::okay);
-  assert(uart.write(0, divisor_low, enabled) == Response::okay);
-  assert(uart.write(1, divisor_high, enabled) == Response::okay);
-  assert(uart.read(0, value, enabled) == Response::okay);
+  const std::array<std::byte, 1> SET_DLAB{std::byte{0x80}};
+  const std::array<std::byte, 1> DIVISOR_LOW{std::byte{0x34}};
+  const std::array<std::byte, 1> DIVISOR_HIGH{std::byte{0x12}};
+  assert(uart.write(3, SET_DLAB, ENABLED) == Response::Okay);
+  assert(uart.write(0, DIVISOR_LOW, ENABLED) == Response::Okay);
+  assert(uart.write(1, DIVISOR_HIGH, ENABLED) == Response::Okay);
+  assert(uart.read(0, value, ENABLED) == Response::Okay);
   assert(value[0] == std::byte{0x34});
-  assert(uart.read(1, value, enabled) == Response::okay);
+  assert(uart.read(1, value, ENABLED) == Response::Okay);
   assert(value[0] == std::byte{0x12});
 
-  const std::array<std::byte, 1> clear_dlab{std::byte{0x03}};
-  const std::array<std::byte, 1> output_x{std::byte{'X'}};
-  assert(uart.write(3, clear_dlab, enabled) == Response::okay);
-  assert(uart.write(0, output_x, disabled) == Response::okay);
+  const std::array<std::byte, 1> CLEAR_DLAB{std::byte{0x03}};
+  const std::array<std::byte, 1> OUTPUT_X{std::byte{'X'}};
+  assert(uart.write(3, CLEAR_DLAB, ENABLED) == Response::Okay);
+  assert(uart.write(0, OUTPUT_X, DISABLED) == Response::Okay);
   assert(backend.output().empty());
-  assert(uart.write(0, output_x, enabled) == Response::okay);
+  assert(uart.write(0, OUTPUT_X, ENABLED) == Response::Okay);
   assert(backend.output().size() == 1);
   assert(backend.output()[0] == std::byte{'X'});
 
   value[0] = std::byte{0xff};
-  assert(uart.read(0, value, disabled) == Response::okay);
+  assert(uart.read(0, value, DISABLED) == Response::Okay);
   assert(value[0] == std::byte{0});
-  assert(uart.read(8, value, enabled) == Response::slave_error);
+  assert(uart.read(8, value, ENABLED) == Response::SlaveError);
 
   uart.reset();
-  assert(uart.read(3, value, enabled) == Response::okay);
+  assert(uart.read(3, value, ENABLED) == Response::Okay);
   assert(value[0] == std::byte{0});
 }
 
@@ -217,23 +217,23 @@ void test_file_uart_backend() {
 
 void test_exit_device() {
   ExitDevice exit;
-  const auto code = byte_array<4>({0xef, 0xbe, 0xad, 0xde});
-  const std::array<std::uint8_t, 4> partial{1, 1, 1, 0};
-  const std::array<std::uint8_t, 4> full{1, 1, 1, 1};
+  const auto CODE = byte_array<4>({0xef, 0xbe, 0xad, 0xde});
+  const std::array<std::uint8_t, 4> PARTIAL{1, 1, 1, 0};
+  const std::array<std::uint8_t, 4> FULL{1, 1, 1, 1};
 
-  assert(exit.write(0, code, partial) == Response::slave_error);
+  assert(exit.write(0, CODE, PARTIAL) == Response::SlaveError);
   assert(!exit.requested());
-  assert(exit.write(0, std::span(code).first(1), std::span(full).first(1)) ==
-         Response::slave_error);
+  assert(exit.write(0, std::span(CODE).first(1), std::span(FULL).first(1)) ==
+         Response::SlaveError);
   assert(!exit.requested());
-  assert(exit.write(0, code, full) == Response::okay);
+  assert(exit.write(0, CODE, FULL) == Response::Okay);
   assert(exit.requested());
   assert(exit.code() == 0xdeadbeefU);
   assert(exit.generation() == 1);
 
   std::array<std::byte, 4> readback{};
-  assert(exit.read(0, readback, full) == Response::okay);
-  assert(readback == code);
+  assert(exit.read(0, readback, FULL) == Response::Okay);
+  assert(readback == CODE);
   exit.clear();
   assert(!exit.requested());
   assert(exit.code() == 0);
@@ -241,7 +241,7 @@ void test_exit_device() {
 
   AddressSpace space;
   space.map(0x2000, 4, exit, "exit");
-  assert(space.write(0x2000, code, full) == Response::okay);
+  assert(space.write(0x2000, CODE, FULL) == Response::Okay);
   assert(exit.requested());
   space.reset();
   assert(!exit.requested());

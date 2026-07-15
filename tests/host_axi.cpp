@@ -45,7 +45,7 @@ void test_bursts() {
   address.address = 0x102;
   address.length = 3;
   address.size = 2;
-  address.burst = axi_tb::Burst::increment;
+  address.burst = axi_tb::Burst::Increment;
   const axi_tb::BurstCursor<8> increment(address);
   check(increment.beat_address(0) == 0x102, "unaligned INCR first address");
   check(increment.beat_address(1) == 0x104,
@@ -58,7 +58,7 @@ void test_bursts() {
   address.address = 0x11c;
   address.length = 3;
   address.size = 2;
-  address.burst = axi_tb::Burst::wrap;
+  address.burst = axi_tb::Burst::Wrap;
   const axi_tb::BurstCursor<8> wrap(address);
   check(wrap.beat_address(0) == 0x11c, "WRAP first address");
   check(wrap.beat_address(1) == 0x110, "WRAP wraps at boundary");
@@ -66,7 +66,7 @@ void test_bursts() {
 
   address.address = 0x200;
   address.length = 15;
-  address.burst = axi_tb::Burst::fixed;
+  address.burst = axi_tb::Burst::Fixed;
   const axi_tb::BurstCursor<8> fixed(address);
   check(fixed.beat_address(15) == 0x200, "FIXED address does not advance");
 
@@ -77,7 +77,7 @@ void test_bursts() {
   address.address = 0xffc;
   address.length = 1;
   address.size = 2;
-  address.burst = axi_tb::Burst::increment;
+  address.burst = axi_tb::Burst::Increment;
   check_protocol_error(
       [&] { axi_tb::BurstCursor<8>(address).validate_4k_boundary(); },
       "4 KiB crossing is rejected");
@@ -91,7 +91,7 @@ void test_bursts() {
   address.address = 0x3000;
   address.length = 255;
   address.size = 0;
-  address.burst = axi_tb::Burst::increment;
+  address.burst = axi_tb::Burst::Increment;
   const axi_tb::BurstCursor<8> maximum(address);
   maximum.validate_4k_boundary();
   check(maximum.beats() == 256 && maximum.beat_address(255) == 0x30ff,
@@ -109,9 +109,9 @@ void test_packed_access() {
   check(axi_tb::packed::read_u64(wide, 61, 64) == 0xfedcba9876543210ULL,
         "packed wide unaligned access");
 
-  const std::array<std::uint8_t, 8> bytes{0, 1, 2, 3, 4, 5, 6, 7};
-  axi_tb::packed::write_bytes(wide, 17, bytes);
-  check(axi_tb::packed::read_bytes<8>(wide, 17) == bytes,
+  const std::array<std::uint8_t, 8> BYTES{0, 1, 2, 3, 4, 5, 6, 7};
+  axi_tb::packed::write_bytes(wide, 17, BYTES);
+  check(axi_tb::packed::read_bytes<8>(wide, 17) == BYTES,
         "packed byte array round trip");
 }
 

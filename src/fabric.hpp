@@ -25,13 +25,13 @@ class AxiFabric {
   static_assert(AddressBits == 32 || AddressBits == 64);
   static_assert(DataBits == 32 || DataBits == 64 || DataBits == 128);
   static_assert(IdBits >= 1 && IdBits <= 32);
-  static constexpr std::size_t data_bytes = DataBits / 8U;
-  static constexpr std::size_t max_burst_beats = 256;
-  static constexpr std::size_t max_exclusive_beats = 16;
-  using Master = MasterSignals<data_bytes>;
-  using Slave = SlaveSignals<data_bytes>;
-  using WriteBeat = WriteDataPayload<data_bytes>;
-  using ReadBeat = ReadDataPayload<data_bytes>;
+  static constexpr std::size_t DATA_BYTES = DataBits / 8U;
+  static constexpr std::size_t MAX_BURST_BEATS = 256;
+  static constexpr std::size_t MAX_EXCLUSIVE_BEATS = 16;
+  using Master = MasterSignals<DATA_BYTES>;
+  using Slave = SlaveSignals<DATA_BYTES>;
+  using WriteBeat = WriteDataPayload<DATA_BYTES>;
+  using ReadBeat = ReadDataPayload<DATA_BYTES>;
 
   explicit AxiFabric(AddressSpace &address_space)
       : address_space_(address_space) {}
@@ -139,21 +139,21 @@ class AxiFabric {
     AddressPayload payload{};
     std::size_t beat = 0;
     AddressSpace::Mapping *mapping = nullptr;
-    Response forced_response = Response::okay;
+    Response forced_response = Response::Okay;
     bool exclusive = false;
   };
 
   struct ReadRoute : RouteBase {};
 
   struct WriteRoute : RouteBase {
-    Response response = Response::okay;
+    Response response = Response::Okay;
     bool exit_response = false;
     std::uint32_t exit_code = 0;
     std::size_t commit_beat = 0;
     bool data_complete = false;
-    std::array<std::array<std::byte, data_bytes>, max_burst_beats>
+    std::array<std::array<std::byte, DATA_BYTES>, MAX_BURST_BEATS>
         staged_data{};
-    std::array<std::array<std::uint8_t, data_bytes>, max_burst_beats>
+    std::array<std::array<std::uint8_t, DATA_BYTES>, MAX_BURST_BEATS>
         staged_strobe{};
   };
 
@@ -307,7 +307,7 @@ class AxiFabric {
     for (std::size_t beat = 0; beat < cursor.beats(); ++beat) {
       const auto base = cursor.bus_word_address(beat);
       const auto mask = cursor.lane_mask(beat);
-      for (std::size_t lane = 0; lane < data_bytes; ++lane) {
+      for (std::size_t lane = 0; lane < DATA_BYTES; ++lane) {
         if (mask[lane] == 0) {
           continue;
         }
@@ -326,24 +326,24 @@ class AxiFabric {
     route.mapping = mapping;
     if (decode_error || mapping == nullptr) {
       route.mapping = nullptr;
-      route.forced_response = Response::decode_error;
+      route.forced_response = Response::DecodeError;
     } else if (cursor.beats() > 1 && !mapping->device->supports_burst()) {
-      route.forced_response = Response::slave_error;
+      route.forced_response = Response::SlaveError;
     }
     if (payload.lock) {
       validate_exclusive(port, channel, payload, cursor);
       if (route.mapping == nullptr ||
           !route.mapping->device->supports_exclusive()) {
-        route.forced_response = Response::slave_error;
+        route.forced_response = Response::SlaveError;
       }
     }
   }
 
-  [[nodiscard]] BurstCursor<data_bytes> make_cursor(
+  [[nodiscard]] BurstCursor<DATA_BYTES> make_cursor(
       std::size_t port, std::string_view channel,
       const AddressPayload &payload) const {
     try {
-      BurstCursor<data_bytes> cursor(payload);
+      BurstCursor<DATA_BYTES> cursor(payload);
       cursor.validate_4k_boundary();
       return cursor;
     } catch (const ProtocolError &error) {
@@ -353,10 +353,10 @@ class AxiFabric {
 
   void validate_exclusive(std::size_t port, std::string_view channel,
                           const AddressPayload &payload,
-                          const BurstCursor<data_bytes> &cursor) const {
+                          const BurstCursor<DATA_BYTES> &cursor) const {
     const auto total = cursor.beats() * cursor.beat_bytes();
-    if (payload.burst != Burst::increment ||
-        cursor.beats() > max_exclusive_beats || total == 0 || total > 128 ||
+    if (payload.burst != Burst::Increment ||
+        cursor.beats() > MAX_EXCLUSIVE_BEATS || total == 0 || total > 128 ||
         (total & (total - 1U)) != 0 || (payload.address & (total - 1U)) != 0) {
       protocol_error(port, channel, "illegal AXI exclusive transfer shape",
                      &payload);
@@ -372,9 +372,9 @@ class AxiFabric {
     if (destination.full()) {
       return;
     }
-    const BurstCursor<data_bytes> cursor(route.payload);
+    const BurstCursor<DATA_BYTES> cursor(route.payload);
     if (route.exclusive && route.beat == 0 &&
-        route.forced_response == Response::okay) {
+        route.forced_response == Response::Okay) {
       establish_monitor(route);
     }
 
@@ -382,10 +382,10 @@ class AxiFabric {
     response.id = route.payload.id;
     response.last = route.beat + 1U == cursor.beats();
     response.response = route.forced_response;
-    if (route.forced_response == Response::okay && route.mapping != nullptr) {
+    if (route.forced_response == Response::Okay && route.mapping != nullptr) {
       const auto mask = cursor.lane_mask(route.beat);
       const auto base = cursor.bus_word_address(route.beat);
-      std::array<std::byte, data_bytes> data{};
+      std::array<std::byte, DATA_BYTES> data{};
       const auto [first, count] = enabled_extent(mask);
       if (count != 0) {
         auto data_span = std::span<std::byte>(data).subspan(first, count);
@@ -395,11 +395,11 @@ class AxiFabric {
         response.response =
             route.mapping->device->read(device_offset, data_span, enable_span);
       }
-      for (std::size_t lane = 0; lane < data_bytes; ++lane) {
+      for (std::size_t lane = 0; lane < DATA_BYTES; ++lane) {
         response.data[lane] = static_cast<std::uint8_t>(data[lane]);
       }
-      if (route.exclusive && response.response == Response::okay) {
-        response.response = Response::exclusive_okay;
+      if (route.exclusive && response.response == Response::Okay) {
+        response.response = Response::ExclusiveOkay;
       }
     }
     destination.push(response);
@@ -415,7 +415,7 @@ class AxiFabric {
     }
     auto &route = write_routes_.front();
     auto &source = ports_[route.port].w;
-    const BurstCursor<data_bytes> cursor(route.payload);
+    const BurstCursor<DATA_BYTES> cursor(route.payload);
     if (route.data_complete) {
       process_write_commit(route, cursor);
       return;
@@ -432,15 +432,15 @@ class AxiFabric {
                      &route.payload);
     }
     const auto lanes = cursor.lane_mask(route.beat);
-    for (std::size_t lane = 0; lane < data_bytes; ++lane) {
+    for (std::size_t lane = 0; lane < DATA_BYTES; ++lane) {
       if (beat.strobe[lane] != 0 && lanes[lane] == 0) {
         protocol_error(route.port, "W", "WSTRB selects an illegal byte lane",
                        &route.payload);
       }
     }
 
-    std::array<std::byte, data_bytes> data{};
-    for (std::size_t lane = 0; lane < data_bytes; ++lane) {
+    std::array<std::byte, DATA_BYTES> data{};
+    for (std::size_t lane = 0; lane < DATA_BYTES; ++lane) {
       data[lane] = static_cast<std::byte>(beat.data[lane]);
     }
     // Do not expose any beat to a device until WLAST and every WSTRB in the
@@ -459,7 +459,7 @@ class AxiFabric {
   }
 
   void process_write_commit(WriteRoute &route,
-                            const BurstCursor<data_bytes> &cursor) {
+                            const BurstCursor<DATA_BYTES> &cursor) {
     auto &destination = ports_[route.port].b;
     if (destination.full()) {
       return;
@@ -470,7 +470,7 @@ class AxiFabric {
       complete_write_route(route);
       return;
     }
-    if (route.forced_response != Response::okay || route.mapping == nullptr) {
+    if (route.forced_response != Response::Okay || route.mapping == nullptr) {
       route.response = combine_response(route.response, route.forced_response);
       complete_write_route(route);
       return;
@@ -501,18 +501,18 @@ class AxiFabric {
   }
 
   [[nodiscard]] Response write_device_beat(
-      WriteRoute &route, const BurstCursor<data_bytes> &cursor,
-      std::size_t beat_index, const std::array<std::byte, data_bytes> &data,
-      const std::array<std::uint8_t, data_bytes> &strobe) {
+      WriteRoute &route, const BurstCursor<DATA_BYTES> &cursor,
+      std::size_t beat_index, const std::array<std::byte, DATA_BYTES> &data,
+      const std::array<std::uint8_t, DATA_BYTES> &strobe) {
     const auto base = cursor.bus_word_address(beat_index);
     const auto lanes = cursor.lane_mask(beat_index);
-    std::array<std::uint8_t, data_bytes> effective{};
-    for (std::size_t lane = 0; lane < data_bytes; ++lane) {
+    std::array<std::uint8_t, DATA_BYTES> effective{};
+    for (std::size_t lane = 0; lane < DATA_BYTES; ++lane) {
       effective[lane] = lanes[lane] && strobe[lane] ? 1U : 0U;
     }
     const auto [first, count] = enabled_extent(lanes);
     if (count == 0) {
-      return Response::okay;
+      return Response::Okay;
     }
     const auto device_offset = base + first - route.mapping->base;
     const auto response = route.mapping->device->write(
@@ -533,26 +533,26 @@ class AxiFabric {
   }
 
   void finish_exclusive_write(WriteRoute &route,
-                              const BurstCursor<data_bytes> &cursor) {
-    if (route.forced_response != Response::okay || route.mapping == nullptr) {
+                              const BurstCursor<DATA_BYTES> &cursor) {
+    if (route.forced_response != Response::Okay || route.mapping == nullptr) {
       route.response = route.forced_response;
       clear_monitor(route.port, route.payload.id);
       return;
     }
     auto *monitor = find_monitor(route.port, route.payload.id);
     if (monitor == nullptr || !(monitor->payload == route.payload)) {
-      route.response = Response::okay;
+      route.response = Response::Okay;
       clear_monitor(route.port, route.payload.id);
       return;
     }
-    constexpr std::size_t max_exclusive_bytes = 128;
-    std::array<std::byte, max_exclusive_bytes> atomic_data{};
-    std::array<std::uint8_t, max_exclusive_bytes> atomic_strobe{};
+    constexpr std::size_t MAX_EXCLUSIVE_BYTES = 128;
+    std::array<std::byte, MAX_EXCLUSIVE_BYTES> atomic_data{};
+    std::array<std::uint8_t, MAX_EXCLUSIVE_BYTES> atomic_strobe{};
     const std::size_t total = cursor.beats() * cursor.beat_bytes();
     for (std::size_t beat = 0; beat < cursor.beats(); ++beat) {
       const auto base = cursor.bus_word_address(beat);
       const auto lanes = cursor.lane_mask(beat);
-      for (std::size_t lane = 0; lane < data_bytes; ++lane) {
+      for (std::size_t lane = 0; lane < DATA_BYTES; ++lane) {
         if (lanes[lane] == 0) {
           continue;
         }
@@ -567,7 +567,7 @@ class AxiFabric {
         std::span<const std::byte>(atomic_data).first(total),
         std::span<const std::uint8_t>(atomic_strobe).first(total));
     route.response =
-        response_is_success(response) ? Response::exclusive_okay : response;
+        response_is_success(response) ? Response::ExclusiveOkay : response;
     if (response_is_success(response)) {
       for (std::size_t index = 0; index < total; ++index) {
         if (atomic_strobe[index] != 0) {
@@ -595,7 +595,7 @@ class AxiFabric {
   }
 
   void establish_monitor(const ReadRoute &route) {
-    const BurstCursor<data_bytes> cursor(route.payload);
+    const BurstCursor<DATA_BYTES> cursor(route.payload);
     const auto total = cursor.beats() * cursor.beat_bytes();
     ExclusiveMonitor *slot = find_monitor(route.port, route.payload.id);
     if (slot == nullptr) {

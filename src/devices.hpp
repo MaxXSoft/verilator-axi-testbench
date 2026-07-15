@@ -122,11 +122,11 @@ class BufferUartBackend final {
 
 class UartDevice final : public Device {
  public:
-  static constexpr std::uint64_t register_span = 8;
-  static constexpr std::uint8_t lsr_data_ready = 1U << 0U;
-  static constexpr std::uint8_t lsr_thr_empty = 1U << 5U;
-  static constexpr std::uint8_t lsr_transmitter_empty = 1U << 6U;
-  static constexpr std::uint8_t lcr_dlab = 1U << 7U;
+  static constexpr std::uint64_t REGISTER_SPAN = 8;
+  static constexpr std::uint8_t LSR_DATA_READY = 1U << 0U;
+  static constexpr std::uint8_t LSR_THR_EMPTY = 1U << 5U;
+  static constexpr std::uint8_t LSR_TRANSMITTER_EMPTY = 1U << 6U;
+  static constexpr std::uint8_t LCR_DLAB = 1U << 7U;
 
   UartDevice();
   template <typename Backend>
@@ -185,7 +185,7 @@ class UartDevice final : public Device {
 
 class ExitDevice final : public Device {
  public:
-  static constexpr std::uint64_t register_span = 4;
+  static constexpr std::uint64_t REGISTER_SPAN = 4;
 
   ExitDevice() noexcept;
 

@@ -43,9 +43,9 @@ double sc_time_stamp() { return static_cast<double>(simulation_time); }
 
 namespace {
 
-constexpr int configuration_error = 2;
-constexpr int protocol_error = 3;
-constexpr int timeout_error = 124;
+constexpr int CONFIGURATION_ERROR = 2;
+constexpr int PROTOCOL_ERROR = 3;
+constexpr int TIMEOUT_ERROR = 124;
 
 #if AXI_TB_TRACE_ENABLED
 #if AXI_TB_TRACE_FST_ENABLED
@@ -279,23 +279,23 @@ void load_images(const Options &options, axi_tb::AddressSpace &address_space) {
   }
   if (options.rom_image) {
     axi_tb::load_raw_image(*options.rom_image, address_space,
-                           axi_tb::config::rom_base);
+                           axi_tb::config::ROM_BASE);
   }
   if (options.ram_image) {
     axi_tb::load_raw_image(*options.ram_image, address_space,
-                           axi_tb::config::ram_base);
+                           axi_tb::config::RAM_BASE);
   }
 }
 
 int run_simulation(int argc, char **argv, const Options &options) {
-  if (axi_tb::config::rom_size > std::numeric_limits<std::size_t>::max() ||
-      axi_tb::config::ram_size > std::numeric_limits<std::size_t>::max()) {
+  if (axi_tb::config::ROM_SIZE > std::numeric_limits<std::size_t>::max() ||
+      axi_tb::config::RAM_SIZE > std::numeric_limits<std::size_t>::max()) {
     throw std::runtime_error(
         "configured ROM or RAM is too large for this host");
   }
 
-  axi_tb::RomDevice rom(static_cast<std::size_t>(axi_tb::config::rom_size));
-  axi_tb::RamDevice ram(static_cast<std::size_t>(axi_tb::config::ram_size));
+  axi_tb::RomDevice rom(static_cast<std::size_t>(axi_tb::config::ROM_SIZE));
+  axi_tb::RamDevice ram(static_cast<std::size_t>(axi_tb::config::RAM_SIZE));
   OwnedFile input_owner;
   OwnedFile output_owner;
   std::FILE *input =
@@ -307,30 +307,30 @@ int run_simulation(int argc, char **argv, const Options &options) {
   axi_tb::UartDevice uart(backend);
   axi_tb::ExitDevice exit;
   axi_tb::AddressSpace address_space;
-  address_space.map(axi_tb::config::rom_base, axi_tb::config::rom_size, rom,
+  address_space.map(axi_tb::config::ROM_BASE, axi_tb::config::ROM_SIZE, rom,
                     "rom");
-  address_space.map(axi_tb::config::ram_base, axi_tb::config::ram_size, ram,
+  address_space.map(axi_tb::config::RAM_BASE, axi_tb::config::RAM_SIZE, ram,
                     "ram");
-  address_space.map(axi_tb::config::uart_base, axi_tb::config::uart_size, uart,
+  address_space.map(axi_tb::config::UART_BASE, axi_tb::config::UART_SIZE, uart,
                     "uart");
-  address_space.map(axi_tb::config::exit_base, axi_tb::config::exit_size, exit,
+  address_space.map(axi_tb::config::EXIT_BASE, axi_tb::config::EXIT_SIZE, exit,
                     "exit");
 
   load_images(options, address_space);
 
   using Binding = axi_tb::VerilatedAxiBinding<
-      Vaxi_tb_dut, axi_tb::config::num_ports, axi_tb::config::address_bits,
-      axi_tb::config::data_bits, axi_tb::config::id_bits>;
+      Vaxi_tb_dut, axi_tb::config::NUM_PORTS, axi_tb::config::ADDRESS_BITS,
+      axi_tb::config::DATA_BITS, axi_tb::config::ID_BITS>;
   using Fabric =
-      axi_tb::AxiFabric<axi_tb::config::num_ports, axi_tb::config::address_bits,
-                        axi_tb::config::data_bits, axi_tb::config::id_bits>;
+      axi_tb::AxiFabric<axi_tb::config::NUM_PORTS, axi_tb::config::ADDRESS_BITS,
+                        axi_tb::config::DATA_BITS, axi_tb::config::ID_BITS>;
 
   VerilatedContext context;
   simulation_time = 0;
   context.commandArgs(argc, argv);
-  context.threads(axi_tb::config::threads);
+  context.threads(axi_tb::config::THREADS);
   Vaxi_tb_dut top(&context);
-  if (top.threads() != axi_tb::config::threads) {
+  if (top.threads() != axi_tb::config::THREADS) {
     throw std::runtime_error(
         "generated Verilator model thread count does not match configuration");
   }
@@ -407,11 +407,11 @@ int run_simulation(int argc, char **argv, const Options &options) {
   }
   if (context.gotFinish()) {
     std::cerr << "[axi-tb] DUT called $finish before writing the exit device\n";
-    return protocol_error;
+    return PROTOCOL_ERROR;
   }
   std::cerr << "[axi-tb] timeout after " << active_cycles
             << " active cycle(s)\n";
-  return timeout_error;
+  return TIMEOUT_ERROR;
 }
 
 }  // namespace
@@ -426,12 +426,12 @@ int main(int argc, char **argv) {
     return run_simulation(argc, argv, options);
   } catch (const axi_tb::ProtocolError &error) {
     std::cerr << "[axi-tb] AXI protocol error: " << error.what() << '\n';
-    return protocol_error;
+    return PROTOCOL_ERROR;
   } catch (const axi_tb::ElfError &error) {
     std::cerr << "[axi-tb] image error: " << error.what() << '\n';
-    return configuration_error;
+    return CONFIGURATION_ERROR;
   } catch (const std::exception &error) {
     std::cerr << "[axi-tb] configuration error: " << error.what() << '\n';
-    return configuration_error;
+    return CONFIGURATION_ERROR;
   }
 }
