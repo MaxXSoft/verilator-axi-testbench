@@ -11,6 +11,18 @@ include(AxiTestbench)
 add_library(axi_tb_core INTERFACE)
 add_library(axi_tb::core ALIAS axi_tb_core)
 
+# Both spellings of UINT64_MAX must pass the compiler-independent literal
+# check before the overflowing value below is rejected.
+set(AXI_TB_TARGET uint64_literal_boundary)
+set(AXI_TB_BOUNDARY_VALUE 18446744073709551615)
+_axi_tb_require_unsigned_literal(BOUNDARY_VALUE)
+set(AXI_TB_BOUNDARY_VALUE 0xffffffffffffffff)
+_axi_tb_require_unsigned_literal(BOUNDARY_VALUE)
+
+if(NOT DEFINED AXI_TB_OVERFLOW_VALUE)
+  set(AXI_TB_OVERFLOW_VALUE 18446744073709551616)
+endif()
+
 add_axi_testbench(
   TARGET overflow_map
   TOP axi_tb_canonical_top
@@ -19,7 +31,7 @@ add_axi_testbench(
   ADDR_WIDTH 64
   DATA_WIDTH 64
   ID_WIDTH 4
-  ROM_BASE 18446744073709551616
+  ROM_BASE ${AXI_TB_OVERFLOW_VALUE}
   ROM_SIZE 1
   RAM_BASE 0x80000000
   RAM_SIZE 0x00001000

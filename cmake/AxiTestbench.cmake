@@ -55,10 +55,35 @@ function(_axi_tb_default argument value)
 endfunction()
 
 function(_axi_tb_require_unsigned_literal argument)
-  if(NOT "${AXI_TB_${argument}}" MATCHES "^(0[xX][0-9A-Fa-f]+|[0-9]+)$")
+  set(_literal "${AXI_TB_${argument}}")
+  set(_out_of_range FALSE)
+
+  if(_literal MATCHES "^0[xX]([0-9A-Fa-f]+)$")
+    set(_digits "${CMAKE_MATCH_1}")
+    string(REGEX REPLACE "^0+" "" _digits "${_digits}")
+    string(LENGTH "${_digits}" _digit_count)
+    if(_digit_count GREATER 16)
+      set(_out_of_range TRUE)
+    endif()
+  elseif(_literal MATCHES "^[0-9]+$")
+    set(_digits "${_literal}")
+    string(REGEX REPLACE "^0+" "" _digits "${_digits}")
+    string(LENGTH "${_digits}" _digit_count)
+    if(_digit_count GREATER 20 OR
+       (_digit_count EQUAL 20 AND
+        "${_digits}" STRGREATER "18446744073709551615"))
+      set(_out_of_range TRUE)
+    endif()
+  else()
     message(FATAL_ERROR
       "add_axi_testbench(${AXI_TB_TARGET}): ${argument} must be an unsigned "
-      "decimal or hexadecimal integer, got '${AXI_TB_${argument}}'")
+      "decimal or hexadecimal integer, got '${_literal}'")
+  endif()
+
+  if(_out_of_range)
+    message(FATAL_ERROR
+      "add_axi_testbench(${AXI_TB_TARGET}): invalid address map: ${argument} "
+      "does not fit in uint64_t, got '${_literal}'")
   endif()
 endfunction()
 

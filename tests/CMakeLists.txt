@@ -34,18 +34,30 @@ set_tests_properties(core.cmake_invalid_address_map PROPERTIES
   TIMEOUT 30
 )
 
-add_test(
-  NAME core.cmake_uint64_overflow
-  COMMAND "${CMAKE_COMMAND}"
-    "-DTEST_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/overflow_map"
-    "-DTEST_BINARY=${CMAKE_CURRENT_BINARY_DIR}/cmake-overflow-map"
-    "-DAXI_TB_SOURCE_ROOT=${AXI_TB_ROOT_DIR}"
-    "-DEXPECTED_PATTERN=invalid address map"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/expect_configure_failure.cmake"
+function(axi_tb_add_uint64_overflow_test name value)
+  add_test(
+    NAME "${name}"
+    COMMAND "${CMAKE_COMMAND}"
+      "-DTEST_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/overflow_map"
+      "-DTEST_BINARY=${CMAKE_CURRENT_BINARY_DIR}/${name}"
+      "-DAXI_TB_SOURCE_ROOT=${AXI_TB_ROOT_DIR}"
+      "-DTEST_CONFIGURE_ARGUMENTS=-DAXI_TB_OVERFLOW_VALUE=${value}"
+      "-DEXPECTED_PATTERN=invalid address map"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/expect_configure_failure.cmake"
+  )
+  set_tests_properties("${name}" PROPERTIES
+    LABELS "core;cmake"
+    TIMEOUT 30
+  )
+endfunction()
+
+axi_tb_add_uint64_overflow_test(
+  core.cmake_uint64_overflow
+  18446744073709551616
 )
-set_tests_properties(core.cmake_uint64_overflow PROPERTIES
-  LABELS "core;cmake"
-  TIMEOUT 30
+axi_tb_add_uint64_overflow_test(
+  core.cmake_uint64_hex_overflow
+  0x10000000000000000
 )
 
 function(axi_tb_add_rtl_lint_test name top source num_axi addr_width

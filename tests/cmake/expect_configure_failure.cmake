@@ -12,9 +12,14 @@ if(NOT DEFINED AXI_TB_SOURCE_ROOT)
 endif()
 
 file(REMOVE_RECURSE "${TEST_BINARY}")
+set(_configure_arguments)
+if(DEFINED TEST_CONFIGURE_ARGUMENTS)
+  list(APPEND _configure_arguments ${TEST_CONFIGURE_ARGUMENTS})
+endif()
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -S "${TEST_SOURCE}" -B "${TEST_BINARY}"
     "-DAXI_TB_SOURCE_ROOT=${AXI_TB_SOURCE_ROOT}"
+    ${_configure_arguments}
   RESULT_VARIABLE _result
   OUTPUT_VARIABLE _stdout
   ERROR_VARIABLE _stderr
