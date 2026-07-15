@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  LLVM_VERSION: "22"
+  VERILATOR_VERSION: "5.048"
+
+jobs:
+  quality-and-tests:
+    name: Format, build, clang-tidy, and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Install LLVM and build tools
+        run: |
+          wget --quiet https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "${LLVM_VERSION}"
+          sudo apt-get install --yes --no-install-recommends \
+            "clang-format-${LLVM_VERSION}" \
+            "clang-tidy-${LLVM_VERSION}" \
+            ninja-build
+
+      - name: Install Verilator
+        uses: veryl-lang/setup-verilator@b155747595eb4b817473a83045ba1da581c4084b
+        with:
+          version: ${{ env.VERILATOR_VERSION }}
+
+      - name: Show tool versions
+        run: |
+          "clang++-${LLVM_VERSION}" --version
+          "clang-format-${LLVM_VERSION}" --version
+          "clang-tidy-${LLVM_VERSION}" --version
+          cmake --version
+          verilator --version
+
+      - name: Check formatting
+        run: |
+          git ls-files -z -- \
+            '*.c' '*.cc' '*.cpp' '*.cxx' \
+            '*.h' '*.hh' '*.hpp' '*.hxx' \
+            | xargs -0 --no-run-if-empty \
+              "clang-format-${LLVM_VERSION}" --dry-run --Werror
+
+      - name: Configure
+        run: |
+          cmake -S . -B build/ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
+            -DAXI_TB_BUILD_TESTS=ON \
+            -DAXI_TB_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build/ci --parallel 2
+
+      - name: Run clang-tidy
+        run: |
+          git ls-files -z -- '*.cpp' \
+            | xargs -0 --no-run-if-empty \
+              "clang-tidy-${LLVM_VERSION}" -p build/ci
+
+      - name: Run repository tests
+        run: ctest --test-dir build/ci --output-on-failure --no-tests=error
+
+  fuxi-rv-tests:
+    name: Fuxi and RV tests
+    needs: quality-and-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          submodules: recursive
+
+      - name: Setup JDK
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: sbt
+          cache-dependency-path: |
+            third_party/Fuxi/build.sbt
+            third_party/Fuxi/project/build.properties
+            third_party/Fuxi/project/plugins.sbt
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@39f26889a4cc78f90accf5a5cec155445888d8ba # v1
+
+      - name: Install LLVM and build tools
+        run: |
+          wget --quiet https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "${LLVM_VERSION}"
+          sudo apt-get install --yes --no-install-recommends \
+            "lld-${LLVM_VERSION}"
+
+      - name: Install Verilator
+        uses: veryl-lang/setup-verilator@b155747595eb4b817473a83045ba1da581c4084b
+        with:
+          version: ${{ env.VERILATOR_VERSION }}
+
+      - name: Show tool versions
+        run: |
+          "clang++-${LLVM_VERSION}" --version
+          "ld.lld-${LLVM_VERSION}" --version
+          java -version
+          sbt --script-version
+          cmake --version
+          verilator --version
+
+      - name: Configure Fuxi and RV tests
+        run: |
+          cmake --preset fuxi \
+            -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
+            -DAXI_TB_RISCV_CLANG="/usr/bin/clang-${LLVM_VERSION}" \
+            -DAXI_TB_RISCV_LLD="/usr/bin/ld.lld-${LLVM_VERSION}"
+
+      - name: Build Fuxi and RV tests
+        run: cmake --build --preset fuxi
+
+      - name: Run Fuxi and RV tests
+        run: ctest --preset fuxi
