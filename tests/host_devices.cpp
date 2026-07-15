@@ -27,8 +27,8 @@ static_assert(!std::is_copy_constructible_v<UartDevice>);
 static_assert(!std::is_move_constructible_v<UartDevice>);
 
 template <std::size_t Size>
-std::array<std::byte, Size>
-byte_array(const std::array<std::uint8_t, Size> &values) {
+std::array<std::byte, Size> byte_array(
+    const std::array<std::uint8_t, Size> &values) {
   std::array<std::byte, Size> result{};
   for (std::size_t index = 0; index < Size; ++index) {
     result[index] = static_cast<std::byte>(values[index]);
@@ -235,7 +235,7 @@ void test_exit_device() {
   assert(!exit.requested());
 }
 
-} // namespace
+}  // namespace
 
 int main() {
   test_address_space_and_memories();

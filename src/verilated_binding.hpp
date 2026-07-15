@@ -12,7 +12,7 @@ namespace axi_tb {
 template <typename Top, std::size_t NumPorts, std::size_t AddressBits,
           std::size_t DataBits, std::size_t IdBits>
 class VerilatedAxiBinding {
-public:
+ public:
   static_assert(NumPorts > 0);
   static_assert(AddressBits == 32 || AddressBits == 64);
   static_assert(DataBits == 32 || DataBits == 64 || DataBits == 128);
@@ -92,4 +92,4 @@ public:
   }
 };
 
-} // namespace axi_tb
+}  // namespace axi_tb

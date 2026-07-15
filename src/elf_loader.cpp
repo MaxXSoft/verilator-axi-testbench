@@ -69,8 +69,8 @@ template <typename Integer>
   return lhs + rhs;
 }
 
-[[nodiscard]] std::vector<std::byte>
-read_file(const std::filesystem::path &path) {
+[[nodiscard]] std::vector<std::byte> read_file(
+    const std::filesystem::path &path) {
   std::ifstream stream(path, std::ios::binary | std::ios::ate);
   if (!stream) {
     throw ElfError("cannot open image: " + path.string());
@@ -146,7 +146,7 @@ void apply_segment(std::span<const std::byte> image,
   }
 }
 
-} // namespace
+}  // namespace
 
 ElfLoadResult load_elf(std::span<const std::byte> image,
                        AddressSpace &address_space) {
@@ -370,4 +370,4 @@ void load_raw_image(const std::filesystem::path &path,
   load_raw_image(image, address_space, address);
 }
 
-} // namespace axi_tb
+}  // namespace axi_tb

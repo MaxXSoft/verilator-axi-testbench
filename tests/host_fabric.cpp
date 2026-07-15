@@ -167,7 +167,7 @@ void test_late_wlast_error_is_atomic() {
   check(ram.bytes()[0] == std::byte{0},
         "staged first beat is not visible before the complete burst");
 
-  inputs[0].w = word(0x88776655, false); // Final beat must assert WLAST.
+  inputs[0].w = word(0x88776655, false);  // Final beat must assert WLAST.
   bool saw_error = false;
   std::string error_message;
   try {
@@ -211,7 +211,7 @@ void test_late_wstrb_error_is_atomic() {
 
   inputs[0].w = {};
   inputs[0].w.data[0] = 0x22;
-  inputs[0].w.strobe[0] = 1; // Beat 1 at 0x1001 requires lane 1.
+  inputs[0].w.strobe[0] = 1;  // Beat 1 at 0x1001 requires lane 1.
   inputs[0].w.last = true;
   bool saw_error = false;
   try {
@@ -303,7 +303,7 @@ void test_fixed_wrap_and_reset() {
         "reset preserves already committed RAM contents");
 }
 
-} // namespace
+}  // namespace
 
 int main() {
   test_late_wlast_error_is_atomic();

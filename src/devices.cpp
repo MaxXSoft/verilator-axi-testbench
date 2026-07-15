@@ -35,13 +35,13 @@ namespace {
   return std::to_integer<std::uint8_t>(value);
 }
 
-[[nodiscard]] bool
-all_lanes_enabled(std::span<const std::uint8_t> lanes) noexcept {
+[[nodiscard]] bool all_lanes_enabled(
+    std::span<const std::uint8_t> lanes) noexcept {
   return std::all_of(lanes.begin(), lanes.end(),
                      [](std::uint8_t value) { return value != 0; });
 }
 
-} // namespace
+}  // namespace
 
 const DeviceOperations RomDevice::operations_{&RomDevice::dispatch_read,
                                               &RomDevice::dispatch_write,
@@ -151,9 +151,8 @@ void AddressSpace::map(std::uint64_t base, std::uint64_t size, Device &device,
   mappings_.insert(position, Mapping{base, size, &device, std::move(name)});
 }
 
-const AddressSpace::Mapping *
-AddressSpace::resolve(std::uint64_t address,
-                      std::uint64_t length) const noexcept {
+const AddressSpace::Mapping *AddressSpace::resolve(
+    std::uint64_t address, std::uint64_t length) const noexcept {
   if (length == 0 || mappings_.empty()) {
     return nullptr;
   }
@@ -353,7 +352,8 @@ RamDevice::RamDevice(std::size_t size) : Device(operations_), size_(size) {
 RamDevice::~RamDevice() { release(); }
 
 RamDevice::RamDevice(RamDevice &&other) noexcept
-    : Device(operations_), size_(std::exchange(other.size_, 0)),
+    : Device(operations_),
+      size_(std::exchange(other.size_, 0)),
       data_(std::exchange(other.data_, nullptr)),
       mapped_(std::exchange(other.mapped_, false)),
       fallback_(std::move(other.fallback_)) {
@@ -554,75 +554,76 @@ std::uint8_t UartDevice::interrupt_identification() const noexcept {
 
 std::uint8_t UartDevice::read_register(std::uint64_t index) {
   switch (index) {
-  case 0:
-    if ((line_control_ & lcr_dlab) != 0) {
-      return divisor_low_;
-    }
-    if (receive_fifo_.empty()) {
+    case 0:
+      if ((line_control_ & lcr_dlab) != 0) {
+        return divisor_low_;
+      }
+      if (receive_fifo_.empty()) {
+        return 0;
+      } else {
+        const std::uint8_t value = receive_fifo_.front();
+        receive_fifo_.pop();
+        return value;
+      }
+    case 1:
+      return (line_control_ & lcr_dlab) != 0 ? divisor_high_
+                                             : interrupt_enable_;
+    case 2:
+      return interrupt_identification();
+    case 3:
+      return line_control_;
+    case 4:
+      return modem_control_;
+    case 5:
+      return static_cast<std::uint8_t>(
+          lsr_thr_empty | lsr_transmitter_empty |
+          (receive_fifo_.empty() ? 0U : lsr_data_ready));
+    case 6:
       return 0;
-    } else {
-      const std::uint8_t value = receive_fifo_.front();
-      receive_fifo_.pop();
-      return value;
-    }
-  case 1:
-    return (line_control_ & lcr_dlab) != 0 ? divisor_high_ : interrupt_enable_;
-  case 2:
-    return interrupt_identification();
-  case 3:
-    return line_control_;
-  case 4:
-    return modem_control_;
-  case 5:
-    return static_cast<std::uint8_t>(
-        lsr_thr_empty | lsr_transmitter_empty |
-        (receive_fifo_.empty() ? 0U : lsr_data_ready));
-  case 6:
-    return 0;
-  case 7:
-    return scratch_;
-  default:
-    return 0;
+    case 7:
+      return scratch_;
+    default:
+      return 0;
   }
 }
 
 void UartDevice::write_register(std::uint64_t index, std::uint8_t value) {
   switch (index) {
-  case 0:
-    if ((line_control_ & lcr_dlab) != 0) {
-      divisor_low_ = value;
-    } else {
-      backend_write_(backend_context_, value);
-      backend_flush_(backend_context_);
-    }
-    break;
-  case 1:
-    if ((line_control_ & lcr_dlab) != 0) {
-      divisor_high_ = value;
-    } else {
-      interrupt_enable_ = static_cast<std::uint8_t>(value & 0x0fU);
-    }
-    break;
-  case 2:
-    fifo_control_ = value;
-    if ((value & 0x02U) != 0) {
-      receive_fifo_.clear();
-    }
-    break;
-  case 3:
-    line_control_ = value;
-    break;
-  case 4:
-    modem_control_ = value;
-    break;
-  case 5:
-  case 6:
-    break; // Read-only registers ignore writes, like a 16550.
-  case 7:
-    scratch_ = value;
-    break;
-  default:
-    break;
+    case 0:
+      if ((line_control_ & lcr_dlab) != 0) {
+        divisor_low_ = value;
+      } else {
+        backend_write_(backend_context_, value);
+        backend_flush_(backend_context_);
+      }
+      break;
+    case 1:
+      if ((line_control_ & lcr_dlab) != 0) {
+        divisor_high_ = value;
+      } else {
+        interrupt_enable_ = static_cast<std::uint8_t>(value & 0x0fU);
+      }
+      break;
+    case 2:
+      fifo_control_ = value;
+      if ((value & 0x02U) != 0) {
+        receive_fifo_.clear();
+      }
+      break;
+    case 3:
+      line_control_ = value;
+      break;
+    case 4:
+      modem_control_ = value;
+      break;
+    case 5:
+    case 6:
+      break;  // Read-only registers ignore writes, like a 16550.
+    case 7:
+      scratch_ = value;
+      break;
+    default:
+      break;
   }
 }
 
@@ -693,4 +694,4 @@ Response ExitDevice::write_impl(std::uint64_t offset,
   return Response::okay;
 }
 
-} // namespace axi_tb
+}  // namespace axi_tb

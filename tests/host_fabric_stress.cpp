@@ -33,7 +33,7 @@ void require(bool condition, const std::string &message) {
 }
 
 class Random {
-public:
+ public:
   explicit Random(std::uint64_t seed) : state_(seed) {}
 
   [[nodiscard]] std::uint64_t next() noexcept {
@@ -52,7 +52,7 @@ public:
     return below(denominator) < numerator;
   }
 
-private:
+ private:
   std::uint64_t state_;
 };
 
@@ -191,7 +191,7 @@ struct PortDriver {
 };
 
 class StressHarness {
-public:
+ public:
   StressHarness() : ram_(kRamSize), fabric_(space_), random_(kSeed), golden_{} {
     space_.map(kRamBase, kRamSize, ram_, "stress-ram");
     fabric_.set_seed(kSeed ^ 0xd1b54a32d192ed03ULL);
@@ -274,7 +274,7 @@ public:
     return statistics_;
   }
 
-private:
+ private:
   void maybe_start(std::size_t port, bool draining) {
     auto &driver = ports_[port];
     if (!driver.idle() || draining) {
@@ -468,7 +468,7 @@ private:
   Statistics statistics_{};
 };
 
-} // namespace
+}  // namespace
 
 int main() {
   try {

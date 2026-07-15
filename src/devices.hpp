@@ -14,7 +14,7 @@
 namespace axi_tb {
 
 class RomDevice final : public Device {
-public:
+ public:
   explicit RomDevice(std::size_t size);
   explicit RomDevice(std::span<const std::byte> image);
   RomDevice(std::span<const std::byte> image, std::size_t size);
@@ -35,7 +35,7 @@ public:
                                     std::span<const std::byte> data,
                                     std::span<const std::uint8_t> strobe);
 
-private:
+ private:
   static Response dispatch_read(Device &device, std::uint64_t offset,
                                 std::span<std::byte> data,
                                 std::span<const std::uint8_t> enable);
@@ -48,7 +48,7 @@ private:
 };
 
 class RamDevice final : public Device {
-public:
+ public:
   explicit RamDevice(std::size_t size);
   ~RamDevice() override;
 
@@ -75,7 +75,7 @@ public:
                                     std::span<const std::byte> data,
                                     std::span<const std::uint8_t> strobe);
 
-private:
+ private:
   static Response dispatch_read(Device &device, std::uint64_t offset,
                                 std::span<std::byte> data,
                                 std::span<const std::uint8_t> enable);
@@ -95,7 +95,7 @@ private:
 // Non-blocking FILE-backed UART.  stdin/stdout are the defaults, but arbitrary
 // FILE handles can be supplied for deterministic tests and redirection.
 class FileUartBackend final {
-public:
+ public:
   explicit FileUartBackend(std::FILE *input = stdin,
                            std::FILE *output = stdout) noexcept;
 
@@ -103,13 +103,13 @@ public:
   void write(std::uint8_t byte);
   void flush();
 
-private:
+ private:
   std::FILE *input_;
   std::FILE *output_;
 };
 
 class BufferUartBackend final {
-public:
+ public:
   BufferUartBackend() = default;
   explicit BufferUartBackend(std::span<const std::byte> input);
 
@@ -124,13 +124,13 @@ public:
   }
   void clear_output() noexcept { output_.clear(); }
 
-private:
+ private:
   std::deque<std::uint8_t> input_;
   std::vector<std::byte> output_;
 };
 
 class UartDevice final : public Device {
-public:
+ public:
   static constexpr std::uint64_t register_span = 8;
   static constexpr std::uint8_t lsr_data_ready = 1U << 0U;
   static constexpr std::uint8_t lsr_thr_empty = 1U << 5U;
@@ -153,12 +153,13 @@ public:
                                     std::span<const std::byte> data,
                                     std::span<const std::uint8_t> strobe);
 
-private:
+ private:
   using TryRead = bool (*)(void *, std::uint8_t &);
   using Write = void (*)(void *, std::uint8_t);
   using Flush = void (*)(void *);
 
-  template <typename Backend> void bind_backend(Backend &backend) noexcept {
+  template <typename Backend>
+  void bind_backend(Backend &backend) noexcept {
     backend_context_ = std::addressof(backend);
     backend_try_read_ = [](void *context, std::uint8_t &byte) {
       return static_cast<Backend *>(context)->try_read(byte);
@@ -200,7 +201,7 @@ private:
 };
 
 class ExitDevice final : public Device {
-public:
+ public:
   static constexpr std::uint64_t register_span = 4;
 
   ExitDevice() noexcept;
@@ -220,7 +221,7 @@ public:
                                     std::span<const std::byte> data,
                                     std::span<const std::uint8_t> strobe);
 
-private:
+ private:
   static Response dispatch_read(Device &device, std::uint64_t offset,
                                 std::span<std::byte> data,
                                 std::span<const std::uint8_t> enable);
@@ -235,4 +236,4 @@ private:
   std::uint64_t generation_ = 0;
 };
 
-} // namespace axi_tb
+}  // namespace axi_tb

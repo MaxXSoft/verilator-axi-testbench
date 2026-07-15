@@ -124,4 +124,4 @@ void write_bytes(Signal &signal, std::size_t lsb,
   }
 }
 
-} // namespace axi_tb::packed
+}  // namespace axi_tb::packed

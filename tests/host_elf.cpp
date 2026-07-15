@@ -97,7 +97,7 @@ std::vector<std::byte> make_elf64() {
   put_le<std::uint32_t>(image, 64 + 4, 6);
   put_le<std::uint64_t>(image, 64 + 8, 0x100);
   put_le<std::uint64_t>(image, 64 + 16, 0x9000);
-  put_le<std::uint64_t>(image, 64 + 24, 0); // Fall back to p_vaddr.
+  put_le<std::uint64_t>(image, 64 + 24, 0);  // Fall back to p_vaddr.
   put_le<std::uint64_t>(image, 64 + 32, 4);
   put_le<std::uint64_t>(image, 64 + 40, 8);
   put_le<std::uint64_t>(image, 64 + 48, 0x100);
@@ -108,7 +108,8 @@ std::vector<std::byte> make_elf64() {
   return image;
 }
 
-template <typename Callable> void expect_elf_error(Callable &&callable) {
+template <typename Callable>
+void expect_elf_error(Callable &&callable) {
   bool failed = false;
   try {
     callable();
@@ -251,7 +252,7 @@ void test_malformed_images_are_rejected_atomically() {
       [&] { (void)axi_tb::load_elf(make_elf32(), oversized_mapping); });
 }
 
-} // namespace
+}  // namespace
 
 int main() {
   test_elf32();

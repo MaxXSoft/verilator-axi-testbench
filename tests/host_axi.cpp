@@ -116,7 +116,7 @@ void test_packed_access() {
         "packed byte array round trip");
 }
 
-} // namespace
+}  // namespace
 
 int main() {
   test_ring_buffer();

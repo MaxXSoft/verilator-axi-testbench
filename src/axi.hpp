@@ -25,7 +25,7 @@ enum class Burst : std::uint8_t {
 };
 
 class ProtocolError final : public std::runtime_error {
-public:
+ public:
   explicit ProtocolError(const std::string &message)
       : std::runtime_error(message) {}
 };
@@ -44,7 +44,8 @@ struct AddressPayload {
                          const AddressPayload &) = default;
 };
 
-template <std::size_t DataBytes> struct WriteDataPayload {
+template <std::size_t DataBytes>
+struct WriteDataPayload {
   static_assert(DataBytes > 0);
   std::array<std::uint8_t, DataBytes> data{};
   std::array<std::uint8_t, DataBytes> strobe{};
@@ -54,7 +55,8 @@ template <std::size_t DataBytes> struct WriteDataPayload {
                          const WriteDataPayload &) = default;
 };
 
-template <std::size_t DataBytes> struct ReadDataPayload {
+template <std::size_t DataBytes>
+struct ReadDataPayload {
   std::uint64_t id = 0;
   std::array<std::uint8_t, DataBytes> data{};
   Response response = Response::okay;
@@ -68,7 +70,8 @@ struct WriteResponsePayload {
   std::uint32_t exit_code = 0;
 };
 
-template <std::size_t DataBytes> struct MasterSignals {
+template <std::size_t DataBytes>
+struct MasterSignals {
   bool aw_valid = false;
   AddressPayload aw{};
   bool w_valid = false;
@@ -79,7 +82,8 @@ template <std::size_t DataBytes> struct MasterSignals {
   bool r_ready = false;
 };
 
-template <std::size_t DataBytes> struct SlaveSignals {
+template <std::size_t DataBytes>
+struct SlaveSignals {
   bool aw_ready = false;
   bool w_ready = false;
   bool b_valid = false;
@@ -102,8 +106,9 @@ constexpr Response combine_response(Response lhs, Response rhs) noexcept {
   return Response::okay;
 }
 
-template <std::size_t Capacity, typename T> class RingBuffer {
-public:
+template <std::size_t Capacity, typename T>
+class RingBuffer {
+ public:
   static_assert(Capacity > 0);
 
   [[nodiscard]] constexpr bool empty() const noexcept { return size_ == 0; }
@@ -159,14 +164,15 @@ public:
     size_ = 0;
   }
 
-private:
+ private:
   std::array<T, Capacity> values_{};
   std::size_t head_ = 0;
   std::size_t size_ = 0;
 };
 
-template <std::size_t DataBytes> class BurstCursor {
-public:
+template <std::size_t DataBytes>
+class BurstCursor {
+ public:
   explicit BurstCursor(const AddressPayload &payload)
       : payload_(payload),
         beats_(static_cast<std::size_t>(payload.length) + 1U),
@@ -187,20 +193,20 @@ public:
     const Wide aligned = start & ~Wide(beat_bytes_ - 1U);
     Wide result = start;
     switch (payload_.burst) {
-    case Burst::fixed:
-      result = start;
-      break;
-    case Burst::increment:
-      result = index == 0 ? start : aligned + Wide(index) * beat_bytes_;
-      break;
-    case Burst::wrap: {
-      const Wide boundary = Wide(beats_) * beat_bytes_;
-      const Wide base = start & ~(boundary - 1U);
-      result = base + ((start - base + Wide(index) * beat_bytes_) % boundary);
-      break;
-    }
-    case Burst::reserved:
-      throw ProtocolError("reserved AXI burst type");
+      case Burst::fixed:
+        result = start;
+        break;
+      case Burst::increment:
+        result = index == 0 ? start : aligned + Wide(index) * beat_bytes_;
+        break;
+      case Burst::wrap: {
+        const Wide boundary = Wide(beats_) * beat_bytes_;
+        const Wide base = start & ~(boundary - 1U);
+        result = base + ((start - base + Wide(index) * beat_bytes_) % boundary);
+        break;
+      }
+      case Burst::reserved:
+        throw ProtocolError("reserved AXI burst type");
     }
     if (result > UINT64_MAX) {
       throw ProtocolError("AXI address arithmetic overflow");
@@ -208,8 +214,8 @@ public:
     return static_cast<std::uint64_t>(result);
   }
 
-  [[nodiscard]] std::array<std::uint8_t, DataBytes>
-  lane_mask(std::size_t index) const {
+  [[nodiscard]] std::array<std::uint8_t, DataBytes> lane_mask(
+      std::size_t index) const {
     const std::uint64_t address = beat_address(index);
     const std::uint64_t aligned_to_size = address & ~(beat_bytes_ - 1U);
     const std::uint64_t first = address;
@@ -240,7 +246,7 @@ public:
     }
   }
 
-private:
+ private:
   static std::size_t checked_beat_bytes(std::uint8_t size) {
     if (size >= sizeof(std::size_t) * 8U) {
       throw ProtocolError("AXI AxSIZE is not representable");
@@ -273,4 +279,4 @@ private:
   std::size_t beat_bytes_ = 0;
 };
 
-} // namespace axi_tb
+}  // namespace axi_tb

@@ -13,12 +13,12 @@
 #include <string_view>
 
 #include "Vaxi_tb_dut.h"
+#include "config.hpp"
 #include "devices.hpp"
 #include "elf_loader.hpp"
 #include "fabric.hpp"
-#include "verilated_binding.hpp"
-#include "config.hpp"
 #include "verilated.h"
+#include "verilated_binding.hpp"
 
 #if AXI_TB_TRACE_ENABLED
 #if AXI_TB_TRACE_FST_ENABLED
@@ -191,9 +191,9 @@ struct FileCloser {
 
 using OwnedFile = std::unique_ptr<std::FILE, FileCloser>;
 
-[[nodiscard]] std::FILE *
-open_file(const std::optional<std::filesystem::path> &path, const char *mode,
-          std::FILE *standard, OwnedFile &owner, std::string_view description) {
+[[nodiscard]] std::FILE *open_file(
+    const std::optional<std::filesystem::path> &path, const char *mode,
+    std::FILE *standard, OwnedFile &owner, std::string_view description) {
   if (!path || path->string() == "-") {
     return standard;
   }
@@ -206,7 +206,7 @@ open_file(const std::optional<std::filesystem::path> &path, const char *mode,
 }
 
 class TerminalGuard {
-public:
+ public:
   explicit TerminalGuard(std::FILE *input) {
 #if defined(__unix__) || defined(__APPLE__)
     descriptor_ = input == nullptr ? -1 : ::fileno(input);
@@ -234,7 +234,7 @@ public:
 #endif
   }
 
-private:
+ private:
 #if defined(__unix__) || defined(__APPLE__)
   int descriptor_ = -1;
   termios original_{};
@@ -398,7 +398,7 @@ int run_simulation(int argc, char **argv, const Options &options) {
   return timeout_error;
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char **argv) {
   try {

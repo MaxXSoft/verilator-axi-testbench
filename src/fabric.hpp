@@ -21,7 +21,7 @@ template <std::size_t NumPorts, std::size_t AddressBits, std::size_t DataBits,
           std::size_t WriteDataDepth = 512, std::size_t ResponseDepth = 4,
           std::size_t RouteDepth = 64>
 class AxiFabric {
-public:
+ public:
   static_assert(NumPorts > 0);
   static_assert(AddressBits == 32 || AddressBits == 64);
   static_assert(DataBits == 32 || DataBits == 64 || DataBits == 128);
@@ -116,7 +116,7 @@ public:
     return true;
   }
 
-private:
+ private:
   struct AddressWatch {
     bool blocked = false;
     AddressPayload payload{};
@@ -186,10 +186,9 @@ private:
     return normalized >= stall_probability_;
   }
 
-  [[noreturn]] void
-  protocol_error(std::size_t port, std::string_view channel,
-                 const std::string &detail,
-                 const AddressPayload *payload = nullptr) const {
+  [[noreturn]] void protocol_error(
+      std::size_t port, std::string_view channel, const std::string &detail,
+      const AddressPayload *payload = nullptr) const {
     std::ostringstream stream;
     stream << "cycle " << cycle_ << ", AXI port " << port << ", " << channel;
     if (payload != nullptr) {
@@ -344,9 +343,9 @@ private:
     }
   }
 
-  [[nodiscard]] BurstCursor<data_bytes>
-  make_cursor(std::size_t port, std::string_view channel,
-              const AddressPayload &payload) const {
+  [[nodiscard]] BurstCursor<data_bytes> make_cursor(
+      std::size_t port, std::string_view channel,
+      const AddressPayload &payload) const {
     try {
       BurstCursor<data_bytes> cursor(payload);
       cursor.validate_4k_boundary();
@@ -505,11 +504,10 @@ private:
     write_routes_.pop();
   }
 
-  [[nodiscard]] Response
-  write_device_beat(WriteRoute &route, const BurstCursor<data_bytes> &cursor,
-                    std::size_t beat_index,
-                    const std::array<std::byte, data_bytes> &data,
-                    const std::array<std::uint8_t, data_bytes> &strobe) {
+  [[nodiscard]] Response write_device_beat(
+      WriteRoute &route, const BurstCursor<data_bytes> &cursor,
+      std::size_t beat_index, const std::array<std::byte, data_bytes> &data,
+      const std::array<std::uint8_t, data_bytes> &strobe) {
     const auto base = cursor.bus_word_address(beat_index);
     const auto lanes = cursor.lane_mask(beat_index);
     std::array<std::uint8_t, data_bytes> effective{};
@@ -585,8 +583,8 @@ private:
   }
 
   template <std::size_t Size>
-  [[nodiscard]] static std::pair<std::size_t, std::size_t>
-  enabled_extent(const std::array<std::uint8_t, Size> &mask) {
+  [[nodiscard]] static std::pair<std::size_t, std::size_t> enabled_extent(
+      const std::array<std::uint8_t, Size> &mask) {
     std::size_t first = Size;
     std::size_t last = 0;
     for (std::size_t index = 0; index < Size; ++index) {
@@ -689,4 +687,4 @@ private:
   std::uint32_t exit_code_ = 0;
 };
 
-} // namespace axi_tb
+}  // namespace axi_tb

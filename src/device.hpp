@@ -39,7 +39,7 @@ struct DeviceOperations {
 // single call is important for MMIO devices, where splitting a write into byte
 // calls could repeat a side effect.
 class Device {
-public:
+ public:
   Device(const Device &) = delete;
   Device &operator=(const Device &) = delete;
   Device(Device &&) = delete;
@@ -103,16 +103,16 @@ public:
 
   virtual void reset() noexcept {}
 
-protected:
+ protected:
   explicit Device(const DeviceOperations &operations) noexcept
       : operations_(&operations) {}
 
-private:
+ private:
   const DeviceOperations *operations_;
 };
 
 class AddressSpace {
-public:
+ public:
   struct Mapping {
     std::uint64_t base = 0;
     std::uint64_t size = 0;
@@ -150,7 +150,7 @@ public:
     return mappings_;
   }
 
-private:
+ private:
   [[nodiscard]] Response resolution_error(std::uint64_t address,
                                           std::uint64_t length) const noexcept;
 
@@ -161,4 +161,4 @@ private:
   return response == Response::okay || response == Response::exclusive_okay;
 }
 
-} // namespace axi_tb
+}  // namespace axi_tb

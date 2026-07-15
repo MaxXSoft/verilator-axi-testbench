@@ -12,7 +12,7 @@
 namespace axi_tb {
 
 class ElfError final : public std::runtime_error {
-public:
+ public:
   using std::runtime_error::runtime_error;
 };
 
@@ -45,4 +45,4 @@ void load_raw_image(std::span<const std::byte> image,
 void load_raw_image(const std::filesystem::path &path,
                     AddressSpace &address_space, std::uint64_t address);
 
-} // namespace axi_tb
+}  // namespace axi_tb
