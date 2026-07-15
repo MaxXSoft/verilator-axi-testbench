@@ -1,5 +1,5 @@
-include(Fuxi)
-include(RiscvTests)
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/Fuxi.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../riscv-common/cmake/RiscvTests.cmake")
 
 option(AXI_TB_FUXI_WITH_RISCV_TESTS
        "Build the locked 59-test upstream RV32 I/M/A manifest" ON)
@@ -16,6 +16,8 @@ set(_fuxi_uart_base 0x10000000)
 set(_fuxi_uart_size 0x00000100)
 set(_fuxi_exit_base 0x10001000)
 set(_fuxi_exit_size 0x00000004)
+set(_riscv_common_software_dir
+    "${CMAKE_CURRENT_LIST_DIR}/../riscv-common/software")
 
 axi_tb_prepare_fuxi(
   STAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/fuxi-stage"
@@ -26,7 +28,7 @@ add_axi_testbench(
   TARGET fuxi_sim
   TOP fuxi_axi_adapter
   RTL_SOURCES
-    "${CMAKE_CURRENT_LIST_DIR}/fuxi_axi_adapter.sv"
+    "${CMAKE_CURRENT_LIST_DIR}/rtl/fuxi_axi_adapter.sv"
     ${_fuxi_rtl}
   NUM_AXI 3
   ADDR_WIDTH 32
@@ -53,6 +55,7 @@ endif()
 axi_tb_add_riscv_software(
   TARGET fuxi_software
   OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/software"
+  REGRESSION_DIR "${CMAKE_CURRENT_LIST_DIR}/software"
   ${_riscv_tests_arguments}
   ROM_BASE ${_fuxi_rom_base}
   ROM_SIZE ${_fuxi_rom_size}
@@ -95,7 +98,7 @@ if(BUILD_TESTING)
         -DSTALL_PROBABILITY=0.35
         -DSEED=12345
         ${_expected_output_argument}
-        -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
+        -P "${_riscv_common_software_dir}/run_expect.cmake"
     )
   endfunction()
 
@@ -110,13 +113,13 @@ if(BUILD_TESTING)
     COMMAND "${CMAKE_COMMAND}"
       "-DPROGRAM=$<TARGET_FILE:fuxi_sim>"
       "-DELF=${_fuxi_uart_elf}"
-      "-DUART_INPUT=${AXI_TB_ROOT_DIR}/software/smoke/uart.in"
+      "-DUART_INPUT=${_riscv_common_software_dir}/smoke/uart.in"
       -DEXPECTED_RESULT=0
       -DMAX_CYCLES=1000000
       -DSTALL_PROBABILITY=0.35
       -DSEED=12345
       "-DEXPECTED_OUTPUT=Fuxi"
-      -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
+      -P "${_riscv_common_software_dir}/run_expect.cmake"
   )
   set_tests_properties(
     fuxi_smoke_pass
@@ -144,7 +147,7 @@ if(BUILD_TESTING)
       -DSEED=12345
       -DEXTRA_ARGUMENTS=+fuxi-mmio-store-irq
       -DEXPECTED_STDOUT=Q
-      -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
+      -P "${_riscv_common_software_dir}/run_expect.cmake"
   )
   set_tests_properties(fuxi_protocol_mmio_store_irq_once PROPERTIES
     LABELS "fuxi;protocol;interrupt;mmio"
@@ -212,7 +215,7 @@ if(BUILD_TESTING)
             -DMAX_CYCLES=1000000
             -DSTALL_PROBABILITY=0.8
             -DSEED=1
-            -P "${AXI_TB_ROOT_DIR}/software/run_expect.cmake"
+            -P "${_riscv_common_software_dir}/run_expect.cmake"
         )
         set_tests_properties(fuxi_protocol_dcache_w_backpressure PROPERTIES
           LABELS "fuxi;protocol;backpressure;fence-i"

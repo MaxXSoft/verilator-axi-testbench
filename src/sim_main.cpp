@@ -13,10 +13,10 @@
 #include <string_view>
 
 #include "Vaxi_tb_dut.h"
-#include "axi_tb/devices.hpp"
-#include "axi_tb/elf_loader.hpp"
-#include "axi_tb/fabric.hpp"
-#include "axi_tb/verilated_binding.hpp"
+#include "devices.hpp"
+#include "elf_loader.hpp"
+#include "fabric.hpp"
+#include "verilated_binding.hpp"
 #include "config.hpp"
 #include "verilated.h"
 

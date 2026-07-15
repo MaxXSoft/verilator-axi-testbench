@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "axi_tb/devices.hpp"
-#include "axi_tb/elf_loader.hpp"
+#include "devices.hpp"
+#include "elf_loader.hpp"
 
 namespace {
 

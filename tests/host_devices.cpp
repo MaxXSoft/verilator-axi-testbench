@@ -8,7 +8,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "axi_tb/devices.hpp"
+#include "devices.hpp"
 
 namespace {
 

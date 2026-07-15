@@ -9,7 +9,7 @@
 #include <string_view>
 #include <vector>
 
-#include "axi_tb/axi.hpp"
+#include "axi.hpp"
 
 namespace axi_tb {
 

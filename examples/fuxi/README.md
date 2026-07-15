@@ -7,6 +7,11 @@ only `build.sbt`, the two `project` files, `src/main/scala/**`, and
 `verilog/FuxiWrapper.v`.  The staged Fuxi sources are elaborated without
 modification.
 
+Fuxi-specific RTL is under `rtl/`, elaboration support is under `cmake/`, and
+the interrupt, SFENCE, and AXI-response regression guests are under
+`software/`. Generic RISC-V runtime, linker, smoke-guest, and upstream
+`riscv-tests` support is shared from the sibling `../riscv-common/` example.
+
 The integration expects:
 
 - `AXI_TB_FUXI_SOURCE_DIR`: Fuxi checkout.

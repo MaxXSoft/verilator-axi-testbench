@@ -2,9 +2,8 @@ include_guard(GLOBAL)
 
 include(CMakeParseArguments)
 
-if(NOT DEFINED AXI_TB_ROOT_DIR)
-  get_filename_component(AXI_TB_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
-endif()
+get_filename_component(AXI_TB_RISCV_COMMON_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
 set(AXI_TB_RISCV_CLANG "" CACHE FILEPATH
     "Clang with a RISC-V backend; leave empty for validated discovery")
@@ -168,7 +167,8 @@ function(_axi_tb_find_riscv_toolchain output_clang output_lld)
   set(_probe_tmp "${_probe_dir}/tmp")
   set(_probe_elf "${_probe_dir}/probe.elf")
   file(MAKE_DIRECTORY "${_probe_dir}" "${_probe_tmp}")
-  set(_probe_source "${AXI_TB_ROOT_DIR}/software/runtime/toolchain_probe.S")
+  set(_probe_source
+    "${AXI_TB_RISCV_COMMON_DIR}/software/runtime/toolchain_probe.S")
   set(_diagnostics)
   foreach(_candidate IN LISTS _clang_candidates)
     if(NOT EXISTS "${_candidate}" OR IS_DIRECTORY "${_candidate}")
@@ -263,8 +263,8 @@ function(_axi_tb_add_riscv_elf)
     DEPENDS
       ${ELF_SOURCES}
       "${ELF_LINKER_SCRIPT}"
-      "${AXI_TB_ROOT_DIR}/software/include/axi_tb_platform.h"
-      "${AXI_TB_ROOT_DIR}/software/include/riscv_test.h"
+      "${AXI_TB_RISCV_COMMON_DIR}/software/include/axi_tb_platform.h"
+      "${AXI_TB_RISCV_COMMON_DIR}/software/include/riscv_test.h"
     COMMAND_EXPAND_LISTS
     VERBATIM
     COMMENT "Building RV32 guest ${ELF_TARGET}"
@@ -283,14 +283,15 @@ endfunction()
 axi_tb_add_riscv_software
 -------------------------
 
-Build the self-contained smoke guests and, with ``WITH_RISCV_TESTS``, the
-locked 59-test RV32 I/M/A suite plus a separate ``ma_data`` capability guest.
-All guests use Clang's RV32 target and a validated ELF LLD.
+Build the reusable smoke guests and, with ``WITH_RISCV_TESTS``, the locked
+59-test RV32 I/M/A suite plus a separate ``ma_data`` capability guest. A DUT
+example may add its own assembly guests with ``REGRESSION_DIR``. All guests
+use Clang's RV32 target and a validated ELF LLD.
 #]=======================================================================]
 function(axi_tb_add_riscv_software)
   set(_options WITH_RISCV_TESTS)
   set(_one_value
-    TARGET OUTPUT_DIR RISCV_TESTS_DIR
+    TARGET OUTPUT_DIR RISCV_TESTS_DIR REGRESSION_DIR
     ROM_BASE ROM_SIZE RAM_BASE RAM_SIZE UART_BASE EXIT_BASE RESET_PC
     OUT_PASS OUT_FAIL OUT_TIMEOUT OUT_UART
     OUT_XRET_IRQ OUT_MMIO_STORE_IRQ
@@ -352,14 +353,14 @@ function(axi_tb_add_riscv_software)
   set(AXI_TB_SW_RESET_PC "${SW_RESET_PC}")
   set(_linker_script "${_output_dir}/link.ld")
   configure_file(
-    "${AXI_TB_ROOT_DIR}/software/link.ld.in"
+    "${AXI_TB_RISCV_COMMON_DIR}/software/link.ld.in"
     "${_linker_script}"
     @ONLY NEWLINE_STYLE UNIX
   )
 
   _axi_tb_find_riscv_toolchain(_clang _lld)
-  set(_runtime "${AXI_TB_ROOT_DIR}/software/runtime/start.S")
-  set(_software_include "${AXI_TB_ROOT_DIR}/software/include")
+  set(_runtime "${AXI_TB_RISCV_COMMON_DIR}/software/runtime/start.S")
+  set(_software_include "${AXI_TB_RISCV_COMMON_DIR}/software/include")
   set(_definitions
     "AXI_TB_ROM_BASE=${SW_ROM_BASE}"
     "AXI_TB_ROM_SIZE=${SW_ROM_SIZE}"
@@ -371,10 +372,28 @@ function(axi_tb_add_riscv_software)
   )
 
   add_custom_target("${SW_TARGET}")
-  foreach(_smoke IN ITEMS
-      pass fail timeout uart xret_irq mmio_store_irq
-      sfence_uncached sfence_writeback_fault
-      access_load access_store access_fetch access_dcache_writeback)
+  set(_smoke_sources
+    "${AXI_TB_RISCV_COMMON_DIR}/software/smoke/pass.S"
+    "${AXI_TB_RISCV_COMMON_DIR}/software/smoke/fail.S"
+    "${AXI_TB_RISCV_COMMON_DIR}/software/smoke/timeout.S"
+    "${AXI_TB_RISCV_COMMON_DIR}/software/smoke/uart.S"
+  )
+  if(SW_REGRESSION_DIR)
+    get_filename_component(_regression_dir "${SW_REGRESSION_DIR}" ABSOLUTE
+      BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+    foreach(_regression IN ITEMS
+        xret_irq mmio_store_irq
+        sfence_uncached sfence_writeback_fault
+        access_load access_store access_fetch access_dcache_writeback)
+      list(APPEND _smoke_sources "${_regression_dir}/${_regression}.S")
+    endforeach()
+  endif()
+
+  foreach(_smoke_source IN LISTS _smoke_sources)
+    if(NOT EXISTS "${_smoke_source}")
+      message(FATAL_ERROR "RISC-V guest source is missing: ${_smoke_source}")
+    endif()
+    get_filename_component(_smoke "${_smoke_source}" NAME_WE)
     set(_elf "${_output_dir}/smoke/${_smoke}.elf")
     set(_target "${SW_TARGET}_smoke_${_smoke}")
     _axi_tb_add_riscv_elf(
@@ -385,7 +404,7 @@ function(axi_tb_add_riscv_software)
       LLD "${_lld}"
       SOURCES
         "${_runtime}"
-        "${AXI_TB_ROOT_DIR}/software/smoke/${_smoke}.S"
+        "${_smoke_source}"
       INCLUDE_DIRS "${_software_include}"
       DEFINITIONS ${_definitions}
     )

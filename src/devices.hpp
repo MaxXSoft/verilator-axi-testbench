@@ -9,7 +9,7 @@
 #include <span>
 #include <vector>
 
-#include "axi_tb/device.hpp"
+#include "device.hpp"
 
 namespace axi_tb {
 

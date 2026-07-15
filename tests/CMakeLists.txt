@@ -3,6 +3,7 @@ function(axi_tb_add_host_test source)
   set(_target "axi_tb_${_stem}")
   add_executable("${_target}" "${source}")
   target_compile_features("${_target}" PRIVATE cxx_std_20)
+  target_include_directories("${_target}" PRIVATE "${AXI_TB_ROOT_DIR}/src")
   target_link_libraries("${_target}" PRIVATE axi_tb::core)
   add_test(NAME "core.${_stem}" COMMAND "${_target}")
   set_tests_properties("core.${_stem}" PROPERTIES

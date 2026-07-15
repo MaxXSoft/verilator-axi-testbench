@@ -6,8 +6,8 @@
 #include <string>
 #include <string_view>
 
-#include "axi_tb/devices.hpp"
-#include "axi_tb/fabric.hpp"
+#include "devices.hpp"
+#include "fabric.hpp"
 
 namespace {
 

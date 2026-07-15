@@ -4,8 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "axi_tb/axi.hpp"
-#include "axi_tb/packed.hpp"
+#include "axi.hpp"
+#include "packed.hpp"
 
 namespace axi_tb {
 

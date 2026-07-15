@@ -374,6 +374,7 @@ function(add_axi_testbench)
       ${_fst_library_dirs})
   endif()
   target_include_directories("${AXI_TB_TARGET}" PRIVATE
+    "${AXI_TB_ROOT_DIR}/src"
     "${_generated_dir}"
     ${AXI_TB_INCLUDE_DIRS}
   )

@@ -19,8 +19,6 @@ set(AXI_TB_THREADS "1" CACHE STRING
   "Default number of threads in each generated Verilator model")
 option(AXI_TB_WARNINGS_AS_ERRORS "Treat warnings in handwritten C++ as errors" OFF)
 option(AXI_TB_BUILD_FUXI "Build the external Fuxi integration example" OFF)
-option(AXI_TB_FUXI_WITH_RISCV_TESTS
-  "Build the locked 59-test RV32 I/M/A suite for Fuxi" OFF)
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -41,9 +39,8 @@ add_library(axi_tb::core ALIAS axi_tb_core)
 
 target_compile_features(axi_tb_core PUBLIC cxx_std_20)
 target_include_directories(axi_tb_core
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+  PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
 if(MSVC)

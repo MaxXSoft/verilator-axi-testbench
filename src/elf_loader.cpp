@@ -1,4 +1,4 @@
-#include "axi_tb/elf_loader.hpp"
+#include "elf_loader.hpp"
 
 #include <algorithm>
 #include <array>

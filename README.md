@@ -13,6 +13,27 @@ AW/AR `ID/ADDR/LEN/SIZE/BURST/LOCK/CACHE/PROT` fields, and complete W/R/B
 channels. It does not support AXI3 write-data interleaving, width conversion,
 `USER/QOS/REGION`, ACE, or AXI5 ATOP.
 
+## Repository Layout
+
+The repository separates the reusable testbench from optional DUT examples:
+
+```text
+src/                         C++ implementation and internal headers
+cmake/                       add_axi_testbench() and its templates
+rtl/                         canonical SystemVerilog AXI boundary
+tests/                       self-contained host, CMake, and RTL tests
+examples/riscv-common/       reusable RISC-V guest/toolchain support
+examples/fuxi/               Fuxi adapter, elaboration, and regressions
+third_party/                 pinned external submodules
+```
+
+The C++ headers live beside their implementation because they are build-tree
+internals: the project has no header install or exported C++ package, and DUT
+integration is performed through `add_axi_testbench()` plus the canonical RTL
+ports. The `axi_tb` C++ namespace is retained. In contrast,
+`cmake/AxiTestbench.cmake` and `rtl/axi_tb_ports.svh` are intentional reusable
+integration boundaries.
+
 ## Architecture
 
 ```text
@@ -91,7 +112,7 @@ The macro declares every initiator-facing `axi_aw_*`,
 signals outside the adapter.
 [`rtl/axi_tb_canonical_top.sv`](rtl/axi_tb_canonical_top.sv) is a
 minimal idle structural example, while
-[`examples/fuxi/fuxi_axi_adapter.sv`](examples/fuxi/fuxi_axi_adapter.sv)
+[`examples/fuxi/rtl/fuxi_axi_adapter.sv`](examples/fuxi/rtl/fuxi_axi_adapter.sv)
 shows a real mapping from three named interfaces to the canonical arrays.
 
 ## CMake Integration
@@ -290,6 +311,12 @@ the staged Fuxi sources are not rewritten. Fuxi's three ports are mapped in
 instruction/data/uncached order, its timer and external IRQs are tied low, and
 its soft IRQ is driven only by the opt-in MMIO test hook. The integration
 asserts that the legacy AXI3 `WID` remains 0.
+
+The reusable RISC-V toolchain discovery, runtime, linker script, basic guests,
+and upstream `riscv-tests` manifest live under `examples/riscv-common/`.
+Fuxi-specific assembly regressions, RTL, and elaboration glue remain under
+`examples/fuxi/`, so adding another RISC-V DUT does not require importing Fuxi
+files.
 
 The optional tests include UART/Exit smoke tests, an xRET/pending-IRQ
 regression, four AXI-response access-fault regressions, and 59 RV32I/M/A guests

@@ -11,8 +11,8 @@
 #include <sstream>
 #include <string>
 
-#include "axi_tb/axi.hpp"
-#include "axi_tb/device.hpp"
+#include "axi.hpp"
+#include "device.hpp"
 
 namespace axi_tb {
 

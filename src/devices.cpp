@@ -1,4 +1,4 @@
-#include "axi_tb/devices.hpp"
+#include "devices.hpp"
 
 #include <algorithm>
 #include <array>
