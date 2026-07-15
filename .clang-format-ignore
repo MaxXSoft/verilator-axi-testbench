@@ -1,0 +1,2 @@
+# This header contains preprocessor macros that expand directly to assembly.
+examples/riscv-common/software/include/riscv_test.h
