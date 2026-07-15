@@ -12,31 +12,11 @@
 
 namespace axi_tb {
 
-class Device;
-
-// Fixed, allocation-free type erasure for the per-beat device path.  Device
-// setup and image loading are cold paths and may remain virtual, but AXI reads
-// and writes dispatch through these plain function pointers.
-struct DeviceOperations {
-  using Read = Response (*)(Device &, std::uint64_t, std::span<std::byte>,
-                            std::span<const std::uint8_t>);
-  using Write = Response (*)(Device &, std::uint64_t,
-                             std::span<const std::byte>,
-                             std::span<const std::uint8_t>);
-  using ExitCode = std::uint32_t (*)(const Device &) noexcept;
-
-  Read read = nullptr;
-  Write write = nullptr;
-  ExitCode exit_code = nullptr;
-  bool supports_exclusive = false;
-  bool supports_burst = false;
-  bool is_exit = false;
-};
-
 // Device accesses are beat-wide.  The enable/strobe span has one entry per
 // byte in data; a zero entry suppresses that lane.  Keeping a whole beat in a
 // single call is important for MMIO devices, where splitting a write into byte
-// calls could repeat a side effect.
+// calls could repeat a side effect.  The public accessors enforce the common
+// contract before dispatching to device-specific virtual hooks.
 class Device {
  public:
   Device(const Device &) = delete;
@@ -54,7 +34,7 @@ class Device {
     if (data.empty()) {
       return Response::okay;
     }
-    return operations_->read(*this, offset, data, enable);
+    return read_impl(offset, data, enable);
   }
 
   [[nodiscard]] Response write(std::uint64_t offset,
@@ -66,7 +46,7 @@ class Device {
     if (data.empty()) {
       return Response::okay;
     }
-    return operations_->write(*this, offset, data, strobe);
+    return write_impl(offset, data, strobe);
   }
 
   // Host-side image initialization bypasses runtime access permissions.  It
@@ -88,26 +68,25 @@ class Device {
     (void)size;
     return false;
   }
-  [[nodiscard]] bool supports_exclusive() const noexcept {
-    return operations_->supports_exclusive;
+  [[nodiscard]] virtual bool supports_exclusive() const noexcept {
+    return false;
   }
-  [[nodiscard]] bool supports_burst() const noexcept {
-    return operations_->supports_burst;
-  }
-  [[nodiscard]] bool is_exit() const noexcept { return operations_->is_exit; }
-  [[nodiscard]] std::uint32_t exit_code() const noexcept {
-    return operations_->exit_code == nullptr ? 0
-                                             : operations_->exit_code(*this);
-  }
+  [[nodiscard]] virtual bool supports_burst() const noexcept { return false; }
+  [[nodiscard]] virtual bool is_exit() const noexcept { return false; }
+  [[nodiscard]] virtual std::uint32_t exit_code() const noexcept { return 0; }
 
   virtual void reset() noexcept {}
 
  protected:
-  explicit Device(const DeviceOperations &operations) noexcept
-      : operations_(&operations) {}
+  Device() = default;
 
  private:
-  const DeviceOperations *operations_;
+  [[nodiscard]] virtual Response read_impl(
+      std::uint64_t offset, std::span<std::byte> data,
+      std::span<const std::uint8_t> enable) = 0;
+  [[nodiscard]] virtual Response write_impl(
+      std::uint64_t offset, std::span<const std::byte> data,
+      std::span<const std::uint8_t> strobe) = 0;
 };
 
 class AddressSpace {

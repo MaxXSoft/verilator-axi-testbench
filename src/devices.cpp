@@ -42,90 +42,6 @@ namespace {
 
 }  // namespace
 
-const DeviceOperations RomDevice::operations_{
-    .read = &RomDevice::dispatch_read,
-    .write = &RomDevice::dispatch_write,
-    .exit_code = nullptr,
-    .supports_exclusive = false,
-    .supports_burst = true,
-    .is_exit = false};
-
-Response RomDevice::dispatch_read(Device &device, std::uint64_t offset,
-                                  std::span<std::byte> data,
-                                  std::span<const std::uint8_t> enable) {
-  return static_cast<RomDevice &>(device).read_impl(offset, data, enable);
-}
-
-Response RomDevice::dispatch_write(Device &device, std::uint64_t offset,
-                                   std::span<const std::byte> data,
-                                   std::span<const std::uint8_t> strobe) {
-  return static_cast<RomDevice &>(device).write_impl(offset, data, strobe);
-}
-
-const DeviceOperations RamDevice::operations_{
-    .read = &RamDevice::dispatch_read,
-    .write = &RamDevice::dispatch_write,
-    .exit_code = nullptr,
-    .supports_exclusive = true,
-    .supports_burst = true,
-    .is_exit = false};
-
-Response RamDevice::dispatch_read(Device &device, std::uint64_t offset,
-                                  std::span<std::byte> data,
-                                  std::span<const std::uint8_t> enable) {
-  return static_cast<RamDevice &>(device).read_impl(offset, data, enable);
-}
-
-Response RamDevice::dispatch_write(Device &device, std::uint64_t offset,
-                                   std::span<const std::byte> data,
-                                   std::span<const std::uint8_t> strobe) {
-  return static_cast<RamDevice &>(device).write_impl(offset, data, strobe);
-}
-
-const DeviceOperations UartDevice::operations_{
-    .read = &UartDevice::dispatch_read,
-    .write = &UartDevice::dispatch_write,
-    .exit_code = nullptr,
-    .supports_exclusive = false,
-    .supports_burst = false,
-    .is_exit = false};
-
-Response UartDevice::dispatch_read(Device &device, std::uint64_t offset,
-                                   std::span<std::byte> data,
-                                   std::span<const std::uint8_t> enable) {
-  return static_cast<UartDevice &>(device).read_impl(offset, data, enable);
-}
-
-Response UartDevice::dispatch_write(Device &device, std::uint64_t offset,
-                                    std::span<const std::byte> data,
-                                    std::span<const std::uint8_t> strobe) {
-  return static_cast<UartDevice &>(device).write_impl(offset, data, strobe);
-}
-
-const DeviceOperations ExitDevice::operations_{
-    .read = &ExitDevice::dispatch_read,
-    .write = &ExitDevice::dispatch_write,
-    .exit_code = &ExitDevice::dispatch_exit_code,
-    .supports_exclusive = false,
-    .supports_burst = false,
-    .is_exit = true};
-
-Response ExitDevice::dispatch_read(Device &device, std::uint64_t offset,
-                                   std::span<std::byte> data,
-                                   std::span<const std::uint8_t> enable) {
-  return static_cast<ExitDevice &>(device).read_impl(offset, data, enable);
-}
-
-Response ExitDevice::dispatch_write(Device &device, std::uint64_t offset,
-                                    std::span<const std::byte> data,
-                                    std::span<const std::uint8_t> strobe) {
-  return static_cast<ExitDevice &>(device).write_impl(offset, data, strobe);
-}
-
-std::uint32_t ExitDevice::dispatch_exit_code(const Device &device) noexcept {
-  return static_cast<const ExitDevice &>(device).code();
-}
-
 void AddressSpace::map(std::uint64_t base, std::uint64_t size, Device &device,
                        std::string name) {
   if (size == 0) {
@@ -263,8 +179,7 @@ void AddressSpace::reset() noexcept {
   }
 }
 
-RomDevice::RomDevice(std::size_t size)
-    : Device(operations_), bytes_(size, std::byte{0}) {
+RomDevice::RomDevice(std::size_t size) : bytes_(size, std::byte{0}) {
   if (size == 0) {
     throw std::invalid_argument("ROM size must not be zero");
   }
@@ -274,7 +189,7 @@ RomDevice::RomDevice(std::span<const std::byte> image)
     : RomDevice(image, image.size()) {}
 
 RomDevice::RomDevice(std::span<const std::byte> image, std::size_t size)
-    : Device(operations_), bytes_(size, std::byte{0}) {
+    : bytes_(size, std::byte{0}) {
   if (size == 0) {
     throw std::invalid_argument("ROM size must not be zero");
   }
@@ -328,7 +243,7 @@ bool RomDevice::can_load(std::uint64_t offset,
   return range_in_bounds(offset, size, bytes_.size());
 }
 
-RamDevice::RamDevice(std::size_t size) : Device(operations_), size_(size) {
+RamDevice::RamDevice(std::size_t size) : size_(size) {
   if (size == 0) {
     throw std::invalid_argument("RAM size must not be zero");
   }
@@ -348,8 +263,7 @@ RamDevice::RamDevice(std::size_t size) : Device(operations_), size_(size) {
 RamDevice::~RamDevice() { release(); }
 
 RamDevice::RamDevice(RamDevice &&other) noexcept
-    : Device(operations_),
-      size_(std::exchange(other.size_, 0)),
+    : size_(std::exchange(other.size_, 0)),
       data_(std::exchange(other.data_, nullptr)),
       mapped_(std::exchange(other.mapped_, false)),
       fallback_(std::move(other.fallback_)) {
@@ -508,7 +422,7 @@ void BufferUartBackend::write(std::uint8_t byte) {
   output_.push_back(static_cast<std::byte>(byte));
 }
 
-UartDevice::UartDevice() : Device(operations_), owned_backend_(std::in_place) {
+UartDevice::UartDevice() : owned_backend_(std::in_place) {
   bind_backend(*owned_backend_);
   reset();
 }
@@ -652,7 +566,7 @@ Response UartDevice::write_impl(std::uint64_t offset,
   return Response::okay;
 }
 
-ExitDevice::ExitDevice() noexcept : Device(operations_) {}
+ExitDevice::ExitDevice() noexcept = default;
 
 void ExitDevice::clear() noexcept {
   requested_ = false;
@@ -660,7 +574,7 @@ void ExitDevice::clear() noexcept {
 }
 
 Response ExitDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
-                               std::span<const std::uint8_t> enable) const {
+                               std::span<const std::uint8_t> enable) {
   if (!in_bounds(offset, data.size(), register_span)) {
     return Response::slave_error;
   }

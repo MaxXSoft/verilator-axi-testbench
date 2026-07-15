@@ -23,6 +23,7 @@ using axi_tb::UartDevice;
 
 static_assert(!std::is_copy_constructible_v<axi_tb::Device>);
 static_assert(!std::is_move_constructible_v<axi_tb::Device>);
+static_assert(std::is_abstract_v<axi_tb::Device>);
 static_assert(!std::is_copy_constructible_v<UartDevice>);
 static_assert(!std::is_move_constructible_v<UartDevice>);
 

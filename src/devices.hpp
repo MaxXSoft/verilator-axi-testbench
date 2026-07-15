@@ -28,21 +28,15 @@ class RomDevice final : public Device {
   [[nodiscard]] bool loadable() const noexcept override { return true; }
   [[nodiscard]] bool can_load(std::uint64_t offset,
                               std::uint64_t size) const noexcept override;
-  [[nodiscard]] Response read_impl(std::uint64_t offset,
-                                   std::span<std::byte> data,
-                                   std::span<const std::uint8_t> enable);
-  [[nodiscard]] Response write_impl(std::uint64_t offset,
-                                    std::span<const std::byte> data,
-                                    std::span<const std::uint8_t> strobe);
+  [[nodiscard]] bool supports_burst() const noexcept override { return true; }
 
  private:
-  static Response dispatch_read(Device &device, std::uint64_t offset,
-                                std::span<std::byte> data,
-                                std::span<const std::uint8_t> enable);
-  static Response dispatch_write(Device &device, std::uint64_t offset,
-                                 std::span<const std::byte> data,
-                                 std::span<const std::uint8_t> strobe);
-  static const DeviceOperations operations_;
+  [[nodiscard]] Response read_impl(
+      std::uint64_t offset, std::span<std::byte> data,
+      std::span<const std::uint8_t> enable) override;
+  [[nodiscard]] Response write_impl(
+      std::uint64_t offset, std::span<const std::byte> data,
+      std::span<const std::uint8_t> strobe) override;
 
   std::vector<std::byte> bytes_;
 };
@@ -68,21 +62,18 @@ class RamDevice final : public Device {
   [[nodiscard]] bool loadable() const noexcept override { return true; }
   [[nodiscard]] bool can_load(std::uint64_t offset,
                               std::uint64_t size) const noexcept override;
-  [[nodiscard]] Response read_impl(std::uint64_t offset,
-                                   std::span<std::byte> data,
-                                   std::span<const std::uint8_t> enable);
-  [[nodiscard]] Response write_impl(std::uint64_t offset,
-                                    std::span<const std::byte> data,
-                                    std::span<const std::uint8_t> strobe);
+  [[nodiscard]] bool supports_exclusive() const noexcept override {
+    return true;
+  }
+  [[nodiscard]] bool supports_burst() const noexcept override { return true; }
 
  private:
-  static Response dispatch_read(Device &device, std::uint64_t offset,
-                                std::span<std::byte> data,
-                                std::span<const std::uint8_t> enable);
-  static Response dispatch_write(Device &device, std::uint64_t offset,
-                                 std::span<const std::byte> data,
-                                 std::span<const std::uint8_t> strobe);
-  static const DeviceOperations operations_;
+  [[nodiscard]] Response read_impl(
+      std::uint64_t offset, std::span<std::byte> data,
+      std::span<const std::uint8_t> enable) override;
+  [[nodiscard]] Response write_impl(
+      std::uint64_t offset, std::span<const std::byte> data,
+      std::span<const std::uint8_t> strobe) override;
 
   void release() noexcept;
 
@@ -139,19 +130,12 @@ class UartDevice final : public Device {
 
   UartDevice();
   template <typename Backend>
-  explicit UartDevice(Backend &backend) noexcept : Device(operations_) {
+  explicit UartDevice(Backend &backend) noexcept {
     bind_backend(backend);
     reset();
   }
 
   void reset() noexcept override;
-
-  [[nodiscard]] Response read_impl(std::uint64_t offset,
-                                   std::span<std::byte> data,
-                                   std::span<const std::uint8_t> enable);
-  [[nodiscard]] Response write_impl(std::uint64_t offset,
-                                    std::span<const std::byte> data,
-                                    std::span<const std::uint8_t> strobe);
 
  private:
   using TryRead = bool (*)(void *, std::uint8_t &);
@@ -172,13 +156,12 @@ class UartDevice final : public Device {
     };
   }
 
-  static Response dispatch_read(Device &device, std::uint64_t offset,
-                                std::span<std::byte> data,
-                                std::span<const std::uint8_t> enable);
-  static Response dispatch_write(Device &device, std::uint64_t offset,
-                                 std::span<const std::byte> data,
-                                 std::span<const std::uint8_t> strobe);
-  static const DeviceOperations operations_;
+  [[nodiscard]] Response read_impl(
+      std::uint64_t offset, std::span<std::byte> data,
+      std::span<const std::uint8_t> enable) override;
+  [[nodiscard]] Response write_impl(
+      std::uint64_t offset, std::span<const std::byte> data,
+      std::span<const std::uint8_t> strobe) override;
 
   void poll_input();
   [[nodiscard]] std::uint8_t read_register(std::uint64_t index);
@@ -213,23 +196,18 @@ class ExitDevice final : public Device {
   }
   void clear() noexcept;
   void reset() noexcept override { clear(); }
-
-  [[nodiscard]] Response read_impl(std::uint64_t offset,
-                                   std::span<std::byte> data,
-                                   std::span<const std::uint8_t> enable) const;
-  [[nodiscard]] Response write_impl(std::uint64_t offset,
-                                    std::span<const std::byte> data,
-                                    std::span<const std::uint8_t> strobe);
+  [[nodiscard]] bool is_exit() const noexcept override { return true; }
+  [[nodiscard]] std::uint32_t exit_code() const noexcept override {
+    return code_;
+  }
 
  private:
-  static Response dispatch_read(Device &device, std::uint64_t offset,
-                                std::span<std::byte> data,
-                                std::span<const std::uint8_t> enable);
-  static Response dispatch_write(Device &device, std::uint64_t offset,
-                                 std::span<const std::byte> data,
-                                 std::span<const std::uint8_t> strobe);
-  static std::uint32_t dispatch_exit_code(const Device &device) noexcept;
-  static const DeviceOperations operations_;
+  [[nodiscard]] Response read_impl(
+      std::uint64_t offset, std::span<std::byte> data,
+      std::span<const std::uint8_t> enable) override;
+  [[nodiscard]] Response write_impl(
+      std::uint64_t offset, std::span<const std::byte> data,
+      std::span<const std::uint8_t> strobe) override;
 
   bool requested_ = false;
   std::uint32_t code_ = 0;
