@@ -1,7 +1,6 @@
 #include "devices.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cerrno>
 #include <climits>
 #include <cstring>
