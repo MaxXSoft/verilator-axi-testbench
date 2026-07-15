@@ -177,10 +177,10 @@ class AxiFabric {
     random_state_ ^= random_state_ << 13U;
     random_state_ ^= random_state_ >> 7U;
     random_state_ ^= random_state_ << 17U;
-    const double normalized =
-        static_cast<double>(random_state_) /
-        static_cast<double>(std::numeric_limits<std::uint64_t>::max());
-    return normalized >= stall_probability_;
+    const auto threshold = static_cast<std::uint64_t>(
+        stall_probability_ *
+        static_cast<double>(std::numeric_limits<std::uint64_t>::max()));
+    return random_state_ >= threshold;
   }
 
   [[noreturn]] void protocol_error(
