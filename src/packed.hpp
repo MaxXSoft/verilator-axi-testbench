@@ -34,7 +34,7 @@ void set_word(Signal &signal, std::size_t index, std::uint32_t value) {
       throw std::out_of_range("packed signal word index");
     }
     using Unsigned = std::make_unsigned_t<Value>;
-    Unsigned current = static_cast<Unsigned>(signal);
+    auto current = static_cast<Unsigned>(signal);
     const std::size_t shift = index * 32U;
     const Unsigned mask = static_cast<Unsigned>(UINT32_MAX) << shift;
     current = (current & ~mask) | (static_cast<Unsigned>(value) << shift);

@@ -36,9 +36,11 @@ std::array<std::byte, Size> byte_array(
   return result;
 }
 
+// This integration-style test intentionally exercises many device paths.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void test_address_space_and_memories() {
   RomDevice rom(16);
-  RamDevice ram(128U * 1024U * 1024U);
+  RamDevice ram(std::size_t{128} * 1024U * 1024U);
   BufferUartBackend uart_backend;
   UartDevice uart(uart_backend);
   ExitDevice exit;
@@ -83,7 +85,7 @@ void test_address_space_and_memories() {
 
   read_data.fill(std::byte{0xcc});
   assert(space.read(14, read_data, all_lanes) == Response::slave_error);
-  for (std::byte value : read_data) {
+  for (const std::byte value : read_data) {
     assert(value == std::byte{0});
   }
   assert(space.read(0x900, read_data, all_lanes) == Response::decode_error);
@@ -120,6 +122,9 @@ void test_address_space_and_memories() {
   assert(size_mismatch_was_rejected);
 }
 
+// Keeping the complete UART register scenario together makes failures easier
+// to localize than splitting it into state-dependent test fragments.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void test_uart() {
   BufferUartBackend backend;
   UartDevice uart(backend);
@@ -179,13 +184,17 @@ void test_uart() {
 }
 
 void test_file_uart_backend() {
+  // The raw handles are non-owning views closed explicitly at the end of this
+  // focused C stdio interoperability test.
+  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   std::FILE *input = std::tmpfile();
+  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   std::FILE *output = std::tmpfile();
   assert(input != nullptr);
   assert(output != nullptr);
   std::fputc('Q', input);
   std::fflush(input);
-  std::rewind(input);
+  assert(std::fseek(input, 0, SEEK_SET) == 0);
 
   {
     FileUartBackend backend(input, output);
@@ -197,9 +206,11 @@ void test_file_uart_backend() {
     backend.flush();
   }
 
-  std::rewind(output);
+  assert(std::fseek(output, 0, SEEK_SET) == 0);
   assert(std::fgetc(output) == 'Z');
+  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   std::fclose(input);
+  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   std::fclose(output);
 }
 
@@ -237,6 +248,8 @@ void test_exit_device() {
 
 }  // namespace
 
+// Test assertions and helpers intentionally report failures by throwing.
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main() {
   test_address_space_and_memories();
   test_uart();

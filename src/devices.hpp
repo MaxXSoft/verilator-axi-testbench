@@ -216,7 +216,7 @@ class ExitDevice final : public Device {
 
   [[nodiscard]] Response read_impl(std::uint64_t offset,
                                    std::span<std::byte> data,
-                                   std::span<const std::uint8_t> enable);
+                                   std::span<const std::uint8_t> enable) const;
   [[nodiscard]] Response write_impl(std::uint64_t offset,
                                     std::span<const std::byte> data,
                                     std::span<const std::uint8_t> strobe);

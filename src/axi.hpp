@@ -120,13 +120,13 @@ class RingBuffer {
     return Capacity;
   }
 
-  constexpr T &front() {
+  [[nodiscard]] constexpr T &front() {
     if (empty()) {
       throw std::logic_error("front() on empty RingBuffer");
     }
     return values_[head_];
   }
-  constexpr const T &front() const {
+  [[nodiscard]] constexpr const T &front() const {
     if (empty()) {
       throw std::logic_error("front() on empty RingBuffer");
     }
@@ -190,19 +190,22 @@ class BurstCursor {
     }
     using Wide = unsigned __int128;
     const Wide start = payload_.address;
-    const Wide aligned = start & ~Wide(beat_bytes_ - 1U);
+    const Wide aligned = start & ~static_cast<Wide>(beat_bytes_ - 1U);
     Wide result = start;
     switch (payload_.burst) {
       case Burst::fixed:
         result = start;
         break;
       case Burst::increment:
-        result = index == 0 ? start : aligned + Wide(index) * beat_bytes_;
+        result = index == 0 ? start
+                            : aligned + static_cast<Wide>(index) * beat_bytes_;
         break;
       case Burst::wrap: {
-        const Wide boundary = Wide(beats_) * beat_bytes_;
+        const Wide boundary = static_cast<Wide>(beats_) * beat_bytes_;
         const Wide base = start & ~(boundary - 1U);
-        result = base + ((start - base + Wide(index) * beat_bytes_) % boundary);
+        result =
+            base + ((start - base + static_cast<Wide>(index) * beat_bytes_) %
+                    boundary);
         break;
       }
       case Burst::reserved:
@@ -230,7 +233,7 @@ class BurstCursor {
   }
 
   [[nodiscard]] std::uint64_t bus_word_address(std::size_t index) const {
-    return beat_address(index) & ~(std::uint64_t(DataBytes) - 1U);
+    return beat_address(index) & ~(static_cast<std::uint64_t>(DataBytes) - 1U);
   }
 
   void validate_4k_boundary() const {
@@ -265,7 +268,7 @@ class BurstCursor {
       throw ProtocolError("AXI FIXED burst contains more than 16 beats");
     }
     if (payload_.burst == Burst::wrap) {
-      if (!(beats_ == 2 || beats_ == 4 || beats_ == 8 || beats_ == 16)) {
+      if (beats_ != 2 && beats_ != 4 && beats_ != 8 && beats_ != 16) {
         throw ProtocolError("AXI WRAP burst length is not 2, 4, 8, or 16");
       }
       if ((payload_.address & (beat_bytes_ - 1U)) != 0) {

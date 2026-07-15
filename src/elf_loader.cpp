@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -22,6 +23,15 @@ struct ParsedSegment {
   ElfSegment public_segment;
   std::uint64_t file_offset = 0;
   std::uint64_t alignment = 0;
+  std::size_t program_header_index = 0;
+};
+
+struct ParsedHeader {
+  std::uint64_t entry = 0;
+  std::uint64_t program_header_offset = 0;
+  std::uint64_t program_header_size = 0;
+  std::uint16_t program_header_count = 0;
+  bool is_64_bit = false;
 };
 
 [[nodiscard]] std::string hexadecimal(std::uint64_t value) {
@@ -146,17 +156,14 @@ void apply_segment(std::span<const std::byte> image,
   }
 }
 
-}  // namespace
-
-ElfLoadResult load_elf(std::span<const std::byte> image,
-                       AddressSpace &address_space) {
+[[nodiscard]] ParsedHeader parse_header(std::span<const std::byte> image) {
   require_range(0, 16, image.size(), "identification");
   if (image[0] != std::byte{0x7f} || image[1] != std::byte{'E'} ||
       image[2] != std::byte{'L'} || image[3] != std::byte{'F'}) {
     throw ElfError("input is not an ELF image");
   }
 
-  const std::uint8_t elf_class = std::to_integer<std::uint8_t>(image[4]);
+  const auto elf_class = std::to_integer<std::uint8_t>(image[4]);
   if (elf_class != elf_class_32 && elf_class != elf_class_64) {
     throw ElfError("unsupported ELF class (expected ELF32 or ELF64)");
   }
@@ -167,156 +174,175 @@ ElfLoadResult load_elf(std::span<const std::byte> image,
     throw ElfError("unsupported ELF identification version");
   }
 
-  const bool is_64_bit = elf_class == elf_class_64;
-  const std::uint64_t header_size = is_64_bit ? 64U : 52U;
-  const std::uint64_t program_header_size = is_64_bit ? 56U : 32U;
+  ParsedHeader header;
+  header.is_64_bit = elf_class == elf_class_64;
+  const std::uint64_t header_size = header.is_64_bit ? 64U : 52U;
+  header.program_header_size = header.is_64_bit ? 56U : 32U;
   require_range(0, header_size, image.size(), "header");
 
-  const std::uint32_t version =
-      read_little_endian<std::uint32_t>(image, 20, "version");
+  const auto version = read_little_endian<std::uint32_t>(image, 20, "version");
   if (version != elf_version_current) {
     throw ElfError("unsupported ELF header version");
   }
 
-  const std::uint64_t entry =
-      is_64_bit ? read_little_endian<std::uint64_t>(image, 24, "entry point")
-                : read_little_endian<std::uint32_t>(image, 24, "entry point");
-  const std::uint64_t program_header_offset =
-      is_64_bit ? read_little_endian<std::uint64_t>(image, 32,
-                                                    "program-header offset")
-                : read_little_endian<std::uint32_t>(image, 28,
-                                                    "program-header offset");
-  const std::uint16_t declared_header_size = read_little_endian<std::uint16_t>(
-      image, is_64_bit ? 52 : 40, "header size");
-  const std::uint16_t declared_program_header_size =
-      read_little_endian<std::uint16_t>(image, is_64_bit ? 54 : 42,
-                                        "program-header entry size");
-  const std::uint16_t program_header_count = read_little_endian<std::uint16_t>(
-      image, is_64_bit ? 56 : 44, "program-header count");
+  header.entry =
+      header.is_64_bit
+          ? read_little_endian<std::uint64_t>(image, 24, "entry point")
+          : read_little_endian<std::uint32_t>(image, 24, "entry point");
+  header.program_header_offset = header.is_64_bit
+                                     ? read_little_endian<std::uint64_t>(
+                                           image, 32, "program-header offset")
+                                     : read_little_endian<std::uint32_t>(
+                                           image, 28, "program-header offset");
+  const auto declared_header_size = read_little_endian<std::uint16_t>(
+      image, header.is_64_bit ? 52 : 40, "header size");
+  const auto declared_program_header_size = read_little_endian<std::uint16_t>(
+      image, header.is_64_bit ? 54 : 42, "program-header entry size");
+  header.program_header_count = read_little_endian<std::uint16_t>(
+      image, header.is_64_bit ? 56 : 44, "program-header count");
 
   if (declared_header_size < header_size) {
     throw ElfError("ELF header size is smaller than its class requires");
   }
-  if (program_header_count == 0xffffU) {
+  if (header.program_header_count == 0xffffU) {
     throw ElfError("extended ELF program-header counts are not supported");
   }
-  if (program_header_count != 0 &&
-      declared_program_header_size < program_header_size) {
+  if (header.program_header_count != 0 &&
+      declared_program_header_size < header.program_header_size) {
     throw ElfError(
         "ELF program-header entry is smaller than its class requires");
   }
-  const std::uint64_t table_size =
-      checked_multiply(program_header_count, declared_program_header_size,
+  header.program_header_size = declared_program_header_size;
+  const auto table_size =
+      checked_multiply(header.program_header_count, header.program_header_size,
                        "program-header table size");
-  require_range(program_header_offset, table_size, image.size(),
+  require_range(header.program_header_offset, table_size, image.size(),
                 "program-header table");
+  return header;
+}
 
-  std::vector<ParsedSegment> parsed_segments;
-  parsed_segments.reserve(program_header_count);
-  std::vector<std::size_t> source_header_indices;
-  source_header_indices.reserve(program_header_count);
+[[nodiscard]] std::optional<ParsedSegment> parse_program_header(
+    std::span<const std::byte> image, const ParsedHeader &header,
+    std::size_t index, AddressSpace &address_space) {
+  const auto offset =
+      checked_add(header.program_header_offset,
+                  checked_multiply(index, header.program_header_size,
+                                   "program-header offset"),
+                  "program-header offset");
+  const auto type =
+      read_little_endian<std::uint32_t>(image, offset, "segment type");
+  if (type != pt_load) {
+    return std::nullopt;
+  }
 
-  for (std::size_t index = 0; index < program_header_count; ++index) {
-    const std::uint64_t offset =
-        checked_add(program_header_offset,
-                    checked_multiply(index, declared_program_header_size,
-                                     "program-header offset"),
-                    "program-header offset");
-    const std::uint32_t type =
-        read_little_endian<std::uint32_t>(image, offset, "segment type");
-    if (type != pt_load) {
-      continue;
-    }
+  ParsedSegment parsed;
+  parsed.program_header_index = index;
+  if (header.is_64_bit) {
+    parsed.public_segment.flags =
+        read_little_endian<std::uint32_t>(image, offset + 4, "segment flags");
+    parsed.file_offset = read_little_endian<std::uint64_t>(
+        image, offset + 8, "segment file offset");
+    parsed.public_segment.virtual_address = read_little_endian<std::uint64_t>(
+        image, offset + 16, "segment virtual address");
+    parsed.public_segment.physical_address = read_little_endian<std::uint64_t>(
+        image, offset + 24, "segment physical address");
+    parsed.public_segment.file_size = read_little_endian<std::uint64_t>(
+        image, offset + 32, "segment file size");
+    parsed.public_segment.memory_size = read_little_endian<std::uint64_t>(
+        image, offset + 40, "segment memory size");
+    parsed.alignment = read_little_endian<std::uint64_t>(image, offset + 48,
+                                                         "segment alignment");
+  } else {
+    parsed.file_offset = read_little_endian<std::uint32_t>(
+        image, offset + 4, "segment file offset");
+    parsed.public_segment.virtual_address = read_little_endian<std::uint32_t>(
+        image, offset + 8, "segment virtual address");
+    parsed.public_segment.physical_address = read_little_endian<std::uint32_t>(
+        image, offset + 12, "segment physical address");
+    parsed.public_segment.file_size = read_little_endian<std::uint32_t>(
+        image, offset + 16, "segment file size");
+    parsed.public_segment.memory_size = read_little_endian<std::uint32_t>(
+        image, offset + 20, "segment memory size");
+    parsed.public_segment.flags =
+        read_little_endian<std::uint32_t>(image, offset + 24, "segment flags");
+    parsed.alignment = read_little_endian<std::uint32_t>(image, offset + 28,
+                                                         "segment alignment");
+  }
 
-    ParsedSegment parsed;
-    if (is_64_bit) {
-      parsed.public_segment.flags =
-          read_little_endian<std::uint32_t>(image, offset + 4, "segment flags");
-      parsed.file_offset = read_little_endian<std::uint64_t>(
-          image, offset + 8, "segment file offset");
-      parsed.public_segment.virtual_address = read_little_endian<std::uint64_t>(
-          image, offset + 16, "segment virtual address");
-      parsed.public_segment.physical_address =
-          read_little_endian<std::uint64_t>(image, offset + 24,
-                                            "segment physical address");
-      parsed.public_segment.file_size = read_little_endian<std::uint64_t>(
-          image, offset + 32, "segment file size");
-      parsed.public_segment.memory_size = read_little_endian<std::uint64_t>(
-          image, offset + 40, "segment memory size");
-      parsed.alignment = read_little_endian<std::uint64_t>(image, offset + 48,
-                                                           "segment alignment");
-    } else {
-      parsed.file_offset = read_little_endian<std::uint32_t>(
-          image, offset + 4, "segment file offset");
-      parsed.public_segment.virtual_address = read_little_endian<std::uint32_t>(
-          image, offset + 8, "segment virtual address");
-      parsed.public_segment.physical_address =
-          read_little_endian<std::uint32_t>(image, offset + 12,
-                                            "segment physical address");
-      parsed.public_segment.file_size = read_little_endian<std::uint32_t>(
-          image, offset + 16, "segment file size");
-      parsed.public_segment.memory_size = read_little_endian<std::uint32_t>(
-          image, offset + 20, "segment memory size");
-      parsed.public_segment.flags = read_little_endian<std::uint32_t>(
-          image, offset + 24, "segment flags");
-      parsed.alignment = read_little_endian<std::uint32_t>(image, offset + 28,
-                                                           "segment alignment");
-    }
-
-    if (parsed.public_segment.file_size > parsed.public_segment.memory_size) {
+  if (parsed.public_segment.file_size > parsed.public_segment.memory_size) {
+    throw ElfError("PT_LOAD[" + std::to_string(index) +
+                   "] has p_filesz greater than p_memsz");
+  }
+  require_range(parsed.file_offset, parsed.public_segment.file_size,
+                image.size(), "loadable segment data");
+  if (parsed.alignment > 1) {
+    if ((parsed.alignment & (parsed.alignment - 1U)) != 0) {
       throw ElfError("PT_LOAD[" + std::to_string(index) +
-                     "] has p_filesz greater than p_memsz");
+                     "] alignment is not a power of two");
     }
-    require_range(parsed.file_offset, parsed.public_segment.file_size,
-                  image.size(), "loadable segment data");
-    if (parsed.alignment > 1) {
-      if ((parsed.alignment & (parsed.alignment - 1U)) != 0) {
-        throw ElfError("PT_LOAD[" + std::to_string(index) +
-                       "] alignment is not a power of two");
-      }
-      if ((parsed.public_segment.virtual_address % parsed.alignment) !=
-          (parsed.file_offset % parsed.alignment)) {
-        throw ElfError("PT_LOAD[" + std::to_string(index) +
-                       "] virtual address and file offset are incongruent");
-      }
-    }
-
-    parsed.public_segment.load_address =
-        parsed.public_segment.physical_address != 0
-            ? parsed.public_segment.physical_address
-            : parsed.public_segment.virtual_address;
-    (void)checked_add(parsed.public_segment.load_address,
-                      parsed.public_segment.memory_size,
-                      "loadable segment address range");
-
-    if (parsed.public_segment.memory_size != 0) {
-      validate_load_target(address_space, parsed.public_segment, index);
-      parsed_segments.push_back(parsed);
-      source_header_indices.push_back(index);
+    if ((parsed.public_segment.virtual_address % parsed.alignment) !=
+        (parsed.file_offset % parsed.alignment)) {
+      throw ElfError("PT_LOAD[" + std::to_string(index) +
+                     "] virtual address and file offset are incongruent");
     }
   }
 
-  std::vector<std::size_t> address_order(parsed_segments.size());
+  parsed.public_segment.load_address =
+      parsed.public_segment.physical_address != 0
+          ? parsed.public_segment.physical_address
+          : parsed.public_segment.virtual_address;
+  (void)checked_add(parsed.public_segment.load_address,
+                    parsed.public_segment.memory_size,
+                    "loadable segment address range");
+  if (parsed.public_segment.memory_size == 0) {
+    return std::nullopt;
+  }
+  validate_load_target(address_space, parsed.public_segment, index);
+  return parsed;
+}
+
+[[nodiscard]] std::vector<ParsedSegment> parse_load_segments(
+    std::span<const std::byte> image, const ParsedHeader &header,
+    AddressSpace &address_space) {
+  std::vector<ParsedSegment> segments;
+  segments.reserve(header.program_header_count);
+  for (std::size_t index = 0; index < header.program_header_count; ++index) {
+    auto segment = parse_program_header(image, header, index, address_space);
+    if (segment) {
+      segments.push_back(*segment);
+    }
+  }
+  return segments;
+}
+
+void validate_no_overlap(const std::vector<ParsedSegment> &segments) {
+  std::vector<std::size_t> address_order(segments.size());
   for (std::size_t index = 0; index < address_order.size(); ++index) {
     address_order[index] = index;
   }
-  std::sort(address_order.begin(), address_order.end(),
-            [&parsed_segments](std::size_t lhs, std::size_t rhs) {
-              return parsed_segments[lhs].public_segment.load_address <
-                     parsed_segments[rhs].public_segment.load_address;
-            });
+  std::ranges::sort(address_order, {}, [&segments](std::size_t index) {
+    return segments[index].public_segment.load_address;
+  });
   for (std::size_t index = 1; index < address_order.size(); ++index) {
     const ElfSegment &previous =
-        parsed_segments[address_order[index - 1]].public_segment;
-    const ElfSegment &current =
-        parsed_segments[address_order[index]].public_segment;
-    if (previous.load_address + previous.memory_size > current.load_address) {
-      throw ElfError(
-          "PT_LOAD[" +
-          std::to_string(source_header_indices[address_order[index]]) +
-          "] overlaps another loadable segment");
+        segments[address_order[index - 1]].public_segment;
+    const ParsedSegment &current = segments[address_order[index]];
+    if (previous.load_address + previous.memory_size >
+        current.public_segment.load_address) {
+      throw ElfError("PT_LOAD[" + std::to_string(current.program_header_index) +
+                     "] overlaps another loadable segment");
     }
   }
+}
+
+}  // namespace
+
+ElfLoadResult load_elf(std::span<const std::byte> image,
+                       AddressSpace &address_space) {
+  const ParsedHeader header = parse_header(image);
+  const std::vector<ParsedSegment> parsed_segments =
+      parse_load_segments(image, header, address_space);
+  validate_no_overlap(parsed_segments);
 
   // Parsing, all bounds checks, destination checks, and overlap checks have
   // completed.  From here on loadable() promises that in-range initialization
@@ -326,8 +352,8 @@ ElfLoadResult load_elf(std::span<const std::byte> image,
   }
 
   ElfLoadResult result;
-  result.entry = entry;
-  result.is_64_bit = is_64_bit;
+  result.entry = header.entry;
+  result.is_64_bit = header.is_64_bit;
   result.segments.reserve(parsed_segments.size());
   for (const ParsedSegment &segment : parsed_segments) {
     result.segments.push_back(segment.public_segment);

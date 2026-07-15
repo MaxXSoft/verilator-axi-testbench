@@ -14,7 +14,7 @@ namespace {
 
 constexpr std::uint64_t kSeed = 0x51a7e5d3c9b28f04ULL;
 constexpr std::uint64_t kRamBase = 0x80000000ULL;
-constexpr std::size_t kRamSize = 128 * 1024;
+constexpr std::size_t kRamSize = static_cast<std::size_t>(128) * 1024;
 constexpr std::size_t kPortCount = 2;
 constexpr std::size_t kTrafficCycles = 100'000;
 constexpr std::size_t kMaxBeats = 16;
@@ -127,11 +127,13 @@ struct WriteTransaction {
 
   WriteTransaction(const TransactionShape &shape, Random &random,
                    Statistics &statistics)
-      : address(shape.address), cursor(address), beat_count(cursor.beats()) {
+      : address(shape.address),
+        cursor(address),
+        beat_count(cursor.beats()),
+        aw_delay(random.below(5)),
+        w_delay(random.below(5)) {
     // Independent launch delays deliberately exercise AW-before-W,
     // W-before-AW, and same-cycle acceptance.
-    aw_delay = random.below(5);
-    w_delay = random.below(5);
     for (std::size_t beat_index = 0; beat_index < beat_count; ++beat_index) {
       auto &beat = beats[beat_index];
       const auto lanes = cursor.lane_mask(beat_index);
@@ -192,14 +194,14 @@ struct PortDriver {
 
 class StressHarness {
  public:
-  StressHarness() : ram_(kRamSize), fabric_(space_), random_(kSeed), golden_{} {
+  StressHarness() : ram_(kRamSize), fabric_(space_), random_(kSeed) {
     space_.map(kRamBase, kRamSize, ram_, "stress-ram");
     fabric_.set_seed(kSeed ^ 0xd1b54a32d192ed03ULL);
     fabric_.set_stall_probability(0.29);
   }
 
   void reset() {
-    Inputs inputs{};
+    const Inputs inputs{};
     (void)fabric_.drive(true);
     fabric_.commit(inputs, true);
   }
@@ -332,15 +334,15 @@ class StressHarness {
                     const Fabric::Slave &output) {
     auto &driver = ports_[port];
     if (driver.write) {
-      finish_write_cycle(port, input, output);
+      finish_write_cycle(port, input, output, driver.write.value());
     } else if (driver.read) {
-      finish_read_cycle(port, input, output);
+      finish_read_cycle(port, input, output, driver.read.value());
     }
   }
 
   void finish_write_cycle(std::size_t port, const Fabric::Master &input,
-                          const Fabric::Slave &output) {
-    auto &transaction = *ports_[port].write;
+                          const Fabric::Slave &output,
+                          WriteTransaction &transaction) {
     const bool aw_handshake = input.aw_valid && output.aw_ready;
     const bool w_handshake = input.w_valid && output.w_ready;
 
@@ -400,8 +402,8 @@ class StressHarness {
   }
 
   void finish_read_cycle(std::size_t port, const Fabric::Master &input,
-                         const Fabric::Slave &output) {
-    auto &transaction = *ports_[port].read;
+                         const Fabric::Slave &output,
+                         ReadTransaction &transaction) {
     if (input.ar_valid) {
       if (output.ar_ready) {
         transaction.ar_done = true;
@@ -463,7 +465,7 @@ class StressHarness {
   axi_tb::AddressSpace space_;
   Fabric fabric_;
   Random random_;
-  std::array<std::uint8_t, kRamSize> golden_;
+  std::array<std::uint8_t, kRamSize> golden_{};
   std::array<PortDriver, kPortCount> ports_{};
   Statistics statistics_{};
 };

@@ -57,7 +57,7 @@ using TraceWriter = VerilatedVcdC;
 
 volatile std::sig_atomic_t interrupted = 0;
 
-void handle_interrupt(int) { interrupted = 1; }
+void handle_interrupt(int /*signal*/) { interrupted = 1; }
 
 struct Options {
   std::optional<std::filesystem::path> elf;
@@ -79,7 +79,7 @@ struct Options {
     throw std::invalid_argument(std::string(option) +
                                 " expects an unsigned integer");
   }
-  std::string copy(text);
+  const std::string copy(text);
   char *end = nullptr;
   errno = 0;
   const auto value = std::strtoull(copy.c_str(), &end, 0);
@@ -92,7 +92,7 @@ struct Options {
 
 [[nodiscard]] double parse_probability(std::string_view text,
                                        std::string_view option) {
-  std::string copy(text);
+  const std::string copy(text);
   char *end = nullptr;
   errno = 0;
   const double value = std::strtod(copy.c_str(), &end);
@@ -184,6 +184,8 @@ void print_help(const char *program) {
 struct FileCloser {
   void operator()(std::FILE *file) const noexcept {
     if (file != nullptr) {
+      // Ownership is represented by unique_ptr's custom deleter.
+      // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
       std::fclose(file);
     }
   }
@@ -197,6 +199,8 @@ using OwnedFile = std::unique_ptr<std::FILE, FileCloser>;
   if (!path || path->string() == "-") {
     return standard;
   }
+  // fopen transfers ownership directly into the unique_ptr wrapper.
+  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   owner.reset(std::fopen(path->string().c_str(), mode));
   if (!owner) {
     throw std::runtime_error("cannot open " + std::string(description) + " '" +
@@ -207,9 +211,12 @@ using OwnedFile = std::unique_ptr<std::FILE, FileCloser>;
 
 class TerminalGuard {
  public:
-  explicit TerminalGuard(std::FILE *input) {
+  explicit TerminalGuard(std::FILE *input)
 #if defined(__unix__) || defined(__APPLE__)
-    descriptor_ = input == nullptr ? -1 : ::fileno(input);
+      : descriptor_(input == nullptr ? -1 : ::fileno(input))
+#endif
+  {
+#if defined(__unix__) || defined(__APPLE__)
     if (descriptor_ >= 0 && ::isatty(descriptor_) != 0 &&
         ::tcgetattr(descriptor_, &original_) == 0) {
       termios raw = original_;
@@ -225,6 +232,8 @@ class TerminalGuard {
 
   TerminalGuard(const TerminalGuard &) = delete;
   TerminalGuard &operator=(const TerminalGuard &) = delete;
+  TerminalGuard(TerminalGuard &&) = delete;
+  TerminalGuard &operator=(TerminalGuard &&) = delete;
 
   ~TerminalGuard() {
 #if defined(__unix__) || defined(__APPLE__)
@@ -253,9 +262,30 @@ void evaluate(VerilatedContext &context, Top &top, Trace *trace) {
 }
 
 struct NullTrace {
-  void dump(std::uint64_t) noexcept {}
+  // Keep the same object-oriented interface as the stateful trace writers.
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+  void dump(std::uint64_t /*time*/) noexcept {}
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
   void close() noexcept {}
 };
+
+void load_images(const Options &options, axi_tb::AddressSpace &address_space) {
+  if (options.elf) {
+    const auto loaded = axi_tb::load_elf(*options.elf, address_space);
+    std::cerr << "[axi-tb] loaded " << loaded.segments.size()
+              << " ELF segment(s), entry=0x" << std::hex << loaded.entry
+              << std::dec << '\n';
+    return;
+  }
+  if (options.rom_image) {
+    axi_tb::load_raw_image(*options.rom_image, address_space,
+                           axi_tb::config::rom_base);
+  }
+  if (options.ram_image) {
+    axi_tb::load_raw_image(*options.ram_image, address_space,
+                           axi_tb::config::ram_base);
+  }
+}
 
 int run_simulation(int argc, char **argv, const Options &options) {
   if (axi_tb::config::rom_size > std::numeric_limits<std::size_t>::max() ||
@@ -272,7 +302,7 @@ int run_simulation(int argc, char **argv, const Options &options) {
       open_file(options.uart_input, "rb", stdin, input_owner, "UART input");
   std::FILE *output =
       open_file(options.uart_output, "wb", stdout, output_owner, "UART output");
-  TerminalGuard terminal(input);
+  const TerminalGuard terminal(input);
   axi_tb::FileUartBackend backend(input, output);
   axi_tb::UartDevice uart(backend);
   axi_tb::ExitDevice exit;
@@ -286,21 +316,7 @@ int run_simulation(int argc, char **argv, const Options &options) {
   address_space.map(axi_tb::config::exit_base, axi_tb::config::exit_size, exit,
                     "exit");
 
-  if (options.elf) {
-    const auto loaded = axi_tb::load_elf(*options.elf, address_space);
-    std::cerr << "[axi-tb] loaded " << loaded.segments.size()
-              << " ELF segment(s), entry=0x" << std::hex << loaded.entry
-              << std::dec << '\n';
-  } else {
-    if (options.rom_image) {
-      axi_tb::load_raw_image(*options.rom_image, address_space,
-                             axi_tb::config::rom_base);
-    }
-    if (options.ram_image) {
-      axi_tb::load_raw_image(*options.ram_image, address_space,
-                             axi_tb::config::ram_base);
-    }
-  }
+  load_images(options, address_space);
 
   using Binding = axi_tb::VerilatedAxiBinding<
       Vaxi_tb_dut, axi_tb::config::num_ports, axi_tb::config::address_bits,

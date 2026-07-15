@@ -55,7 +55,7 @@ Fabric::WriteBeat word(std::uint32_t value, bool last = true) {
 std::uint32_t word_value(const Fabric::ReadBeat &beat) {
   std::uint32_t result = 0;
   for (std::size_t index = 0; index < 4; ++index) {
-    result |= std::uint32_t(beat.data[index]) << (index * 8U);
+    result |= static_cast<std::uint32_t>(beat.data[index]) << (index * 8U);
   }
   return result;
 }
@@ -63,7 +63,7 @@ std::uint32_t word_value(const Fabric::ReadBeat &beat) {
 std::uint32_t ram_word(const axi_tb::RamDevice &ram, std::size_t offset) {
   std::uint32_t result = 0;
   for (std::size_t index = 0; index < 4; ++index) {
-    result |= std::uint32_t(
+    result |= static_cast<std::uint32_t>(
                   std::to_integer<std::uint8_t>(ram.bytes()[offset + index]))
               << (index * 8U);
   }
@@ -305,6 +305,8 @@ void test_fixed_wrap_and_reset() {
 
 }  // namespace
 
+// Test assertions and helpers intentionally report failures by throwing.
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main() {
   test_late_wlast_error_is_atomic();
   test_late_wstrb_error_is_atomic();

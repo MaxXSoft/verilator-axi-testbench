@@ -37,18 +37,19 @@ namespace {
 
 [[nodiscard]] bool all_lanes_enabled(
     std::span<const std::uint8_t> lanes) noexcept {
-  return std::all_of(lanes.begin(), lanes.end(),
-                     [](std::uint8_t value) { return value != 0; });
+  return std::ranges::all_of(lanes,
+                             [](std::uint8_t value) { return value != 0; });
 }
 
 }  // namespace
 
-const DeviceOperations RomDevice::operations_{&RomDevice::dispatch_read,
-                                              &RomDevice::dispatch_write,
-                                              nullptr,
-                                              false,
-                                              true,
-                                              false};
+const DeviceOperations RomDevice::operations_{
+    .read = &RomDevice::dispatch_read,
+    .write = &RomDevice::dispatch_write,
+    .exit_code = nullptr,
+    .supports_exclusive = false,
+    .supports_burst = true,
+    .is_exit = false};
 
 Response RomDevice::dispatch_read(Device &device, std::uint64_t offset,
                                   std::span<std::byte> data,
@@ -62,12 +63,13 @@ Response RomDevice::dispatch_write(Device &device, std::uint64_t offset,
   return static_cast<RomDevice &>(device).write_impl(offset, data, strobe);
 }
 
-const DeviceOperations RamDevice::operations_{&RamDevice::dispatch_read,
-                                              &RamDevice::dispatch_write,
-                                              nullptr,
-                                              true,
-                                              true,
-                                              false};
+const DeviceOperations RamDevice::operations_{
+    .read = &RamDevice::dispatch_read,
+    .write = &RamDevice::dispatch_write,
+    .exit_code = nullptr,
+    .supports_exclusive = true,
+    .supports_burst = true,
+    .is_exit = false};
 
 Response RamDevice::dispatch_read(Device &device, std::uint64_t offset,
                                   std::span<std::byte> data,
@@ -81,12 +83,13 @@ Response RamDevice::dispatch_write(Device &device, std::uint64_t offset,
   return static_cast<RamDevice &>(device).write_impl(offset, data, strobe);
 }
 
-const DeviceOperations UartDevice::operations_{&UartDevice::dispatch_read,
-                                               &UartDevice::dispatch_write,
-                                               nullptr,
-                                               false,
-                                               false,
-                                               false};
+const DeviceOperations UartDevice::operations_{
+    .read = &UartDevice::dispatch_read,
+    .write = &UartDevice::dispatch_write,
+    .exit_code = nullptr,
+    .supports_exclusive = false,
+    .supports_burst = false,
+    .is_exit = false};
 
 Response UartDevice::dispatch_read(Device &device, std::uint64_t offset,
                                    std::span<std::byte> data,
@@ -100,12 +103,13 @@ Response UartDevice::dispatch_write(Device &device, std::uint64_t offset,
   return static_cast<UartDevice &>(device).write_impl(offset, data, strobe);
 }
 
-const DeviceOperations ExitDevice::operations_{&ExitDevice::dispatch_read,
-                                               &ExitDevice::dispatch_write,
-                                               &ExitDevice::dispatch_exit_code,
-                                               false,
-                                               false,
-                                               true};
+const DeviceOperations ExitDevice::operations_{
+    .read = &ExitDevice::dispatch_read,
+    .write = &ExitDevice::dispatch_write,
+    .exit_code = &ExitDevice::dispatch_exit_code,
+    .supports_exclusive = false,
+    .supports_burst = false,
+    .is_exit = true};
 
 Response ExitDevice::dispatch_read(Device &device, std::uint64_t offset,
                                    std::span<std::byte> data,
@@ -133,11 +137,7 @@ void AddressSpace::map(std::uint64_t base, std::uint64_t size, Device &device,
   }
 
   const std::uint64_t end = base + size;
-  auto position =
-      std::lower_bound(mappings_.begin(), mappings_.end(), base,
-                       [](const Mapping &mapping, std::uint64_t value) {
-                         return mapping.base < value;
-                       });
+  auto position = std::ranges::lower_bound(mappings_, base, {}, &Mapping::base);
   if (position != mappings_.begin()) {
     const auto &previous = *std::prev(position);
     if (previous.end() > base) {
@@ -148,7 +148,10 @@ void AddressSpace::map(std::uint64_t base, std::uint64_t size, Device &device,
     throw std::invalid_argument("address-space mappings overlap");
   }
 
-  mappings_.insert(position, Mapping{base, size, &device, std::move(name)});
+  mappings_.insert(position, Mapping{.base = base,
+                                     .size = size,
+                                     .device = &device,
+                                     .name = std::move(name)});
 }
 
 const AddressSpace::Mapping *AddressSpace::resolve(
@@ -157,10 +160,7 @@ const AddressSpace::Mapping *AddressSpace::resolve(
     return nullptr;
   }
   auto position =
-      std::upper_bound(mappings_.begin(), mappings_.end(), address,
-                       [](std::uint64_t value, const Mapping &mapping) {
-                         return value < mapping.base;
-                       });
+      std::ranges::upper_bound(mappings_, address, {}, &Mapping::base);
   if (position == mappings_.begin()) {
     return nullptr;
   }
@@ -183,10 +183,7 @@ Response AddressSpace::resolution_error(std::uint64_t address,
                                         std::uint64_t length) const noexcept {
   (void)length;
   auto position =
-      std::upper_bound(mappings_.begin(), mappings_.end(), address,
-                       [](std::uint64_t value, const Mapping &mapping) {
-                         return value < mapping.base;
-                       });
+      std::ranges::upper_bound(mappings_, address, {}, &Mapping::base);
   if (position != mappings_.begin()) {
     const auto &candidate = *std::prev(position);
     if (address >= candidate.base && address < candidate.end()) {
@@ -202,7 +199,7 @@ Response AddressSpace::read(std::uint64_t address, std::span<std::byte> data,
   if (data.size() != enable.size()) {
     throw std::invalid_argument("address-space read data/enable size mismatch");
   }
-  std::fill(data.begin(), data.end(), std::byte{0});
+  std::ranges::fill(data, std::byte{0});
   if (data.empty()) {
     return Response::okay;
   }
@@ -284,7 +281,7 @@ RomDevice::RomDevice(std::span<const std::byte> image, std::size_t size)
   if (image.size() > size) {
     throw std::invalid_argument("ROM image is larger than ROM");
   }
-  std::copy(image.begin(), image.end(), bytes_.begin());
+  std::ranges::copy(image, bytes_.begin());
 }
 
 Response RomDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
@@ -292,7 +289,7 @@ Response RomDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
   if (!in_bounds(offset, data.size(), bytes_.size())) {
     return Response::slave_error;
   }
-  const std::size_t start = static_cast<std::size_t>(offset);
+  const auto start = static_cast<std::size_t>(offset);
   if (all_lanes_enabled(enable)) {
     std::memcpy(data.data(), bytes_.data() + start, data.size());
     return Response::okay;
@@ -322,8 +319,7 @@ Response RomDevice::load(std::uint64_t offset,
   if (!in_bounds(offset, data.size(), bytes_.size())) {
     return Response::slave_error;
   }
-  std::copy(data.begin(), data.end(),
-            bytes_.data() + static_cast<std::size_t>(offset));
+  std::ranges::copy(data, bytes_.data() + static_cast<std::size_t>(offset));
   return Response::okay;
 }
 
@@ -394,7 +390,7 @@ Response RamDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
   if (!in_bounds(offset, data.size(), size_)) {
     return Response::slave_error;
   }
-  const std::size_t start = static_cast<std::size_t>(offset);
+  const auto start = static_cast<std::size_t>(offset);
   if (all_lanes_enabled(enable)) {
     std::memcpy(data.data(), data_ + start, data.size());
     return Response::okay;
@@ -413,7 +409,7 @@ Response RamDevice::write_impl(std::uint64_t offset,
   if (!in_bounds(offset, data.size(), size_)) {
     return Response::slave_error;
   }
-  const std::size_t start = static_cast<std::size_t>(offset);
+  const auto start = static_cast<std::size_t>(offset);
   if (all_lanes_enabled(strobe)) {
     std::memcpy(data_ + start, data.data(), data.size());
     return Response::okay;
@@ -431,7 +427,7 @@ Response RamDevice::load(std::uint64_t offset,
   if (!in_bounds(offset, data.size(), size_)) {
     return Response::slave_error;
   }
-  std::copy(data.begin(), data.end(), data_ + offset);
+  std::ranges::copy(data, data_ + offset);
   return Response::okay;
 }
 
@@ -452,7 +448,8 @@ bool FileUartBackend::try_read(std::uint8_t &byte) {
   if (descriptor < 0) {
     return false;
   }
-  pollfd descriptor_state{descriptor, POLLIN | POLLHUP, 0};
+  pollfd descriptor_state{
+      .fd = descriptor, .events = POLLIN | POLLHUP, .revents = 0};
   const int result = ::poll(&descriptor_state, 1, 0);
   if (result <= 0 || (descriptor_state.revents & (POLLIN | POLLHUP)) == 0) {
     return false;
@@ -489,7 +486,7 @@ BufferUartBackend::BufferUartBackend(std::span<const std::byte> input) {
 }
 
 void BufferUartBackend::push_input(std::span<const std::byte> input) {
-  for (std::byte value : input) {
+  for (const std::byte value : input) {
     input_.push_back(as_u8(value));
   }
 }
@@ -554,17 +551,17 @@ std::uint8_t UartDevice::interrupt_identification() const noexcept {
 
 std::uint8_t UartDevice::read_register(std::uint64_t index) {
   switch (index) {
-    case 0:
+    case 0: {
       if ((line_control_ & lcr_dlab) != 0) {
         return divisor_low_;
       }
       if (receive_fifo_.empty()) {
         return 0;
-      } else {
-        const std::uint8_t value = receive_fifo_.front();
-        receive_fifo_.pop();
-        return value;
       }
+      const std::uint8_t value = receive_fifo_.front();
+      receive_fifo_.pop();
+      return value;
+    }
     case 1:
       return (line_control_ & lcr_dlab) != 0 ? divisor_high_
                                              : interrupt_enable_;
@@ -663,13 +660,13 @@ void ExitDevice::clear() noexcept {
 }
 
 Response ExitDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
-                               std::span<const std::uint8_t> enable) {
+                               std::span<const std::uint8_t> enable) const {
   if (!in_bounds(offset, data.size(), register_span)) {
     return Response::slave_error;
   }
   for (std::size_t lane = 0; lane < data.size(); ++lane) {
     if (enable[lane] != 0) {
-      const unsigned shift = static_cast<unsigned>((offset + lane) * CHAR_BIT);
+      const auto shift = static_cast<unsigned>((offset + lane) * CHAR_BIT);
       data[lane] = static_cast<std::byte>((code_ >> shift) & 0xffU);
     }
   }
@@ -680,8 +677,8 @@ Response ExitDevice::write_impl(std::uint64_t offset,
                                 std::span<const std::byte> data,
                                 std::span<const std::uint8_t> strobe) {
   if (offset != 0 || data.size() != register_span ||
-      !std::all_of(strobe.begin(), strobe.end(),
-                   [](std::uint8_t value) { return value != 0; })) {
+      !std::ranges::all_of(strobe,
+                           [](std::uint8_t value) { return value != 0; })) {
     return Response::slave_error;
   }
 

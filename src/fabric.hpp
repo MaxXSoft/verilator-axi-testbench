@@ -107,13 +107,10 @@ class AxiFabric {
     if (!read_routes_.empty() || !write_routes_.empty()) {
       return false;
     }
-    for (const auto &port : ports_) {
-      if (!port.aw.empty() || !port.w.empty() || !port.ar.empty() ||
-          !port.b.empty() || !port.r.empty()) {
-        return false;
-      }
-    }
-    return true;
+    return std::ranges::all_of(ports_, [](const PortState &port) {
+      return port.aw.empty() && port.w.empty() && port.ar.empty() &&
+             port.b.empty() && port.r.empty();
+    });
   }
 
  private:
@@ -180,9 +177,9 @@ class AxiFabric {
     random_state_ ^= random_state_ << 13U;
     random_state_ ^= random_state_ >> 7U;
     random_state_ ^= random_state_ << 17U;
-    const long double normalized =
-        static_cast<long double>(random_state_) /
-        static_cast<long double>(std::numeric_limits<std::uint64_t>::max());
+    const double normalized =
+        static_cast<double>(random_state_) /
+        static_cast<double>(std::numeric_limits<std::uint64_t>::max());
     return normalized >= stall_probability_;
   }
 
@@ -301,7 +298,7 @@ class AxiFabric {
     route.port = port;
     route.payload = payload;
     route.exclusive = payload.lock;
-    BurstCursor<data_bytes> cursor = make_cursor(port, channel, payload);
+    const auto cursor = make_cursor(port, channel, payload);
     AddressSpace::Mapping *mapping = nullptr;
     bool decode_error = false;
     std::uint64_t address_limit = UINT64_MAX;
@@ -376,7 +373,7 @@ class AxiFabric {
     if (destination.full()) {
       return;
     }
-    BurstCursor<data_bytes> cursor(route.payload);
+    const BurstCursor<data_bytes> cursor(route.payload);
     if (route.exclusive && route.beat == 0 &&
         route.forced_response == Response::okay) {
       establish_monitor(route);
@@ -419,7 +416,7 @@ class AxiFabric {
     }
     auto &route = write_routes_.front();
     auto &source = ports_[route.port].w;
-    BurstCursor<data_bytes> cursor(route.payload);
+    const BurstCursor<data_bytes> cursor(route.payload);
     if (route.data_complete) {
       process_write_commit(route, cursor);
       return;
@@ -560,7 +557,7 @@ class AxiFabric {
         if (lanes[lane] == 0) {
           continue;
         }
-        const std::size_t index =
+        const auto index =
             static_cast<std::size_t>(base + lane - route.payload.address);
         atomic_data[index] = route.staged_data[beat][lane];
         atomic_strobe[index] = route.staged_strobe[beat][lane] != 0 ? 1U : 0U;
@@ -599,7 +596,7 @@ class AxiFabric {
   }
 
   void establish_monitor(const ReadRoute &route) {
-    BurstCursor<data_bytes> cursor(route.payload);
+    const BurstCursor<data_bytes> cursor(route.payload);
     const auto total = cursor.beats() * cursor.beat_bytes();
     ExclusiveMonitor *slot = find_monitor(route.port, route.payload.id);
     if (slot == nullptr) {
@@ -670,6 +667,7 @@ class AxiFabric {
     exit_code_ = 0;
   }
 
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
   AddressSpace &address_space_;
   std::array<PortState, NumPorts> ports_{};
   std::array<Slave, NumPorts> outputs_{};

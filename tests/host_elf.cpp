@@ -109,7 +109,7 @@ std::vector<std::byte> make_elf64() {
 }
 
 template <typename Callable>
-void expect_elf_error(Callable &&callable) {
+void expect_elf_error(Callable callable) {
   bool failed = false;
   try {
     callable();
@@ -254,6 +254,8 @@ void test_malformed_images_are_rejected_atomically() {
 
 }  // namespace
 
+// Test assertions and helpers intentionally report failures by throwing.
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main() {
   test_elf32();
   test_elf64_and_path_loader();

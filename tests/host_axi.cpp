@@ -19,11 +19,11 @@ void check(bool condition, std::string_view message) {
 }
 
 template <typename Function>
-void check_protocol_error(Function &&function, std::string_view message) {
+void check_protocol_error(Function function, std::string_view message) {
   try {
     function();
     check(false, message);
-  } catch (const axi_tb::ProtocolError &) {
+  } catch (const axi_tb::ProtocolError &) {  // NOLINT(bugprone-empty-catch)
   }
 }
 
@@ -47,7 +47,7 @@ void test_bursts() {
   address.length = 3;
   address.size = 2;
   address.burst = axi_tb::Burst::increment;
-  axi_tb::BurstCursor<8> increment(address);
+  const axi_tb::BurstCursor<8> increment(address);
   check(increment.beat_address(0) == 0x102, "unaligned INCR first address");
   check(increment.beat_address(1) == 0x104,
         "unaligned INCR aligns second beat");
@@ -60,7 +60,7 @@ void test_bursts() {
   address.length = 3;
   address.size = 2;
   address.burst = axi_tb::Burst::wrap;
-  axi_tb::BurstCursor<8> wrap(address);
+  const axi_tb::BurstCursor<8> wrap(address);
   check(wrap.beat_address(0) == 0x11c, "WRAP first address");
   check(wrap.beat_address(1) == 0x110, "WRAP wraps at boundary");
   check(wrap.beat_address(2) == 0x114, "WRAP advances after wrap");
@@ -68,11 +68,11 @@ void test_bursts() {
   address.address = 0x200;
   address.length = 15;
   address.burst = axi_tb::Burst::fixed;
-  axi_tb::BurstCursor<8> fixed(address);
+  const axi_tb::BurstCursor<8> fixed(address);
   check(fixed.beat_address(15) == 0x200, "FIXED address does not advance");
 
   address.length = 16;
-  check_protocol_error([&] { axi_tb::BurstCursor<8> invalid(address); },
+  check_protocol_error([&] { const axi_tb::BurstCursor<8> invalid(address); },
                        "FIXED burst longer than 16 is rejected");
 
   address.address = 0xffc;
@@ -86,14 +86,14 @@ void test_bursts() {
   address.address = 0;
   address.length = 0;
   address.size = 7;
-  check_protocol_error([&] { axi_tb::BurstCursor<8> invalid(address); },
+  check_protocol_error([&] { const axi_tb::BurstCursor<8> invalid(address); },
                        "oversized AxSIZE is rejected");
 
   address.address = 0x3000;
   address.length = 255;
   address.size = 0;
   address.burst = axi_tb::Burst::increment;
-  axi_tb::BurstCursor<8> maximum(address);
+  const axi_tb::BurstCursor<8> maximum(address);
   maximum.validate_4k_boundary();
   check(maximum.beats() == 256 && maximum.beat_address(255) == 0x30ff,
         "full 256-beat AXI4 burst is supported");
@@ -118,6 +118,8 @@ void test_packed_access() {
 
 }  // namespace
 
+// Test assertions and helpers intentionally report failures by throwing.
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main() {
   test_ring_buffer();
   test_bursts();

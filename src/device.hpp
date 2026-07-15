@@ -51,7 +51,7 @@ class Device {
     if (data.size() != enable.size()) {
       throw std::invalid_argument("device read data/enable size mismatch");
     }
-    std::fill(data.begin(), data.end(), std::byte{0});
+    std::ranges::fill(data, std::byte{0});
     if (data.empty()) {
       return Response::okay;
     }
