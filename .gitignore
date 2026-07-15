@@ -23,3 +23,9 @@
 .DS_Store
 *~
 *.swp
+
+# Clangd
+.clangd
+
+# Debugging
+/debug/
