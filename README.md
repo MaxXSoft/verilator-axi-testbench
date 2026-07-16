@@ -1,4 +1,6 @@
-# Reusable AXI4 Testbench for Verilator
+# AXI4 Testbench for Verilator
+
+[<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/MaxXSoft/verilator-axi-testbench/ci.yml?branch=master&style=for-the-badge&label=ci">](https://github.com/MaxXSoft/verilator-axi-testbench/actions?query=branch%3Amaster)
 
 This repository provides a reusable simulation environment for AXI initiator
 DUTs. DUT-specific integration and minimal signal renaming stay in
@@ -18,13 +20,13 @@ channels. It does not support AXI3 write-data interleaving, width conversion,
 The repository separates the reusable testbench from optional DUT examples:
 
 ```text
-src/                         C++ implementation and internal headers
-cmake/                       add_axi_testbench() and its templates
-rtl/                         canonical SystemVerilog AXI boundary
-tests/                       self-contained host, CMake, and RTL tests
-examples/riscv-common/       reusable RISC-V guest/toolchain support
-examples/fuxi/               Fuxi adapter, elaboration, and regressions
-third_party/                 pinned external submodules
+src/                    C++ implementation and internal headers
+cmake/                  add_axi_testbench() and its templates
+rtl/                    canonical SystemVerilog AXI boundary
+tests/                  self-contained host, CMake, and RTL tests
+examples/riscv-common/  reusable RISC-V guest/toolchain support
+examples/fuxi/          Fuxi adapter, elaboration, and regressions
+third_party/            pinned external submodules
 ```
 
 The C++ headers live beside their implementation because they are build-tree
