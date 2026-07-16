@@ -359,3 +359,7 @@ To include Fuxi's `ma_data` capability case, which Fuxi expects to
 handle with a trap, reconfigure with
 `-DAXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY=ON`. It can then be selected
 separately with `-L capability`. This option is disabled by default.
+
+## License
+
+Copyright (C) 2026 MaxXing. Licensed under GPLv3.
