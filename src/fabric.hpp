@@ -33,8 +33,8 @@ class AxiFabric {
   using WriteBeat = WriteDataPayload<DATA_BYTES>;
   using ReadBeat = ReadDataPayload<DATA_BYTES>;
 
-  explicit AxiFabric(AddressSpace &address_space)
-      : address_space_(address_space) {}
+  explicit AxiFabric(AddressSpace &address_space, bool reset_devices = true)
+      : address_space_(address_space), reset_devices_(reset_devices) {}
 
   void set_seed(std::uint64_t seed) noexcept {
     random_state_ = seed == 0 ? 0x9e3779b97f4a7c15ULL : seed;
@@ -74,7 +74,7 @@ class AxiFabric {
     if (reset_active) {
       if (!was_reset_) {
         reset_state();
-        address_space_.reset();
+        if (reset_devices_) address_space_.reset();
       }
       was_reset_ = true;
       ++cycle_;
@@ -668,6 +668,7 @@ class AxiFabric {
 
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
   AddressSpace &address_space_;
+  bool reset_devices_;
   std::array<PortState, NumPorts> ports_{};
   std::array<Slave, NumPorts> outputs_{};
   RingBuffer<RouteDepth, ReadRoute> read_routes_;

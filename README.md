@@ -79,8 +79,8 @@ RBR/THR, the LSR DR/THRE/TEMT bits, and the common DLAB, DLL/DLM, IER, LCR,
 MCR, and SCR initialization registers. It does not model exact baud timing,
 interrupts, or complete modem/FIFO behavior. Reset clears fabric, arbitration,
 response, and exclusive state without clearing ROM or RAM contents. Each
-per-beat device access uses a fixed function table instead of C++ virtual
-dispatch, and UART RX uses a fixed 16-byte ring; the default simulation hot
+per-beat device access uses the Device virtual interface, and UART RX uses
+a fixed 16-byte ring; the default simulation hot
 path performs no memory allocation.
 
 ## Canonical SystemVerilog Adapter
@@ -194,12 +194,22 @@ Exit accepts only aligned, full-strobe, single-beat 32-bit writes. When the
 guest writes `0`, the host returns 0. For a nonzero value, the host
 prints the complete guest code and returns 1.
 
+## Device and Platform Extensions
+
+Built-in and external C++ devices use the same explicit registry. A platform
+can start from the preset or an empty specification, add/remove/replace
+devices, change mappings, and connect sideband signals. See
+[the platform API and examples](docs/platform.md). Dynamic libraries and
+device-tree generation are not implemented.
+
 ## Simulator Command Line
 
 ```text
 my_core_sim [options]
 
-  --elf FILE                 Load PT_LOAD segments from a little-endian ELF32/ELF64
+  --elf FILE                 Load ELF32/ELF64 PT_LOADs (repeatable)
+  --load TARGET=FILE         Load raw bytes at an address or mapped instance
+  --set ID.OPTION=VALUE      Override a registered device property
   --rom-image FILE           Load a raw image at the ROM base
   --ram-image FILE           Load a raw image at the RAM base
   --max-cycles N             Maximum active cycles after reset; default 10000000
@@ -212,9 +222,11 @@ my_core_sim [options]
   +NAME[=VALUE]              Pass a plusarg through to the Verilated RTL unchanged
 ```
 
-`--elf` cannot be combined with either raw-image option. The ELF loader
-validates every PT_LOAD segment before writing any data to ROM or RAM, then
-zeroes each `p_memsz - p_filesz` region. Exit statuses are: guest PASS
+`--elf`, `--load`, and the legacy raw-image options can be combined. The
+loader validates all files and destinations before changing memory. Overlaps
+are rejected, including ELF BSS and different mappings of the same device.
+Each `p_memsz - p_filesz` region is zeroed. ELF entry points are reported; the
+DUT still starts at its hardware reset PC. Exit statuses are: guest PASS
 `0`, nonzero guest exit `1`, configuration or image error
 `2`, AXI protocol error (or premature DUT `$finish`)
 `3`, timeout `124`, and SIGINT `130`.

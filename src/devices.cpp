@@ -44,6 +44,7 @@ namespace {
 
 void AddressSpace::map(std::uint64_t base, std::uint64_t size, Device &device,
                        std::string name) {
+  if (frozen_) throw std::logic_error("address space is frozen");
   if (size == 0) {
     throw std::invalid_argument("address-space mapping must not be empty");
   }
@@ -422,7 +423,10 @@ void BufferUartBackend::write(std::uint8_t byte) {
   output_.push_back(static_cast<std::byte>(byte));
 }
 
-UartDevice::UartDevice() : owned_backend_(std::in_place) {
+UartDevice::UartDevice() : UartDevice(stdin, stdout) {}
+
+UartDevice::UartDevice(std::FILE *input, std::FILE *output)
+    : owned_backend_(std::in_place, input, output) {
   bind_backend(*owned_backend_);
   reset();
 }

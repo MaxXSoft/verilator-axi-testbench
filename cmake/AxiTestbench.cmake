@@ -221,7 +221,7 @@ function(add_axi_testbench)
   endif()
   set(_options TRACE TRACE_FST)
   set(_one_value
-    TARGET TOP
+    TARGET TOP PLATFORM_HEADER PLATFORM_TYPE SIDEBAND_HEADER SIDEBAND_TYPE
     NUM_AXI ADDR_WIDTH DATA_WIDTH ID_WIDTH THREADS
     ROM_BASE ROM_SIZE
     RAM_BASE RAM_SIZE
@@ -250,6 +250,10 @@ function(add_axi_testbench)
       "add_axi_testbench(${AXI_TB_TARGET}) requires the axi_tb_core target")
   endif()
 
+  _axi_tb_default(PLATFORM_HEADER platform.hpp)
+  _axi_tb_default(PLATFORM_TYPE axi_tb::DefaultPlatform)
+  _axi_tb_default(SIDEBAND_HEADER platform.hpp)
+  _axi_tb_default(SIDEBAND_TYPE axi_tb::NoSideband)
   _axi_tb_default(NUM_AXI 1)
   _axi_tb_default(ADDR_WIDTH 64)
   _axi_tb_default(DATA_WIDTH 64)

@@ -34,12 +34,13 @@ include(AxiTestbench)
 add_library(axi_tb_core STATIC
   src/devices.cpp
   src/elf_loader.cpp
+  src/platform.cpp
 )
 add_library(axi_tb::core ALIAS axi_tb_core)
 
 target_compile_features(axi_tb_core PUBLIC cxx_std_20)
 target_include_directories(axi_tb_core
-  PRIVATE
+  PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 

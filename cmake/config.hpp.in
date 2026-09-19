@@ -49,3 +49,10 @@ static_assert(ID_BITS >= 1 && ID_BITS <= 32);
 static_assert(THREADS > 0);
 
 }  // namespace axi_tb::config
+
+#include "@AXI_TB_PLATFORM_HEADER@"
+#include "@AXI_TB_SIDEBAND_HEADER@"
+namespace axi_tb::config {
+using PlatformDefinition = @AXI_TB_PLATFORM_TYPE@;
+using SidebandBinding = @AXI_TB_SIDEBAND_TYPE@;
+}

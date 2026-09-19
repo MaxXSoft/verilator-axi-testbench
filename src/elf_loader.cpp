@@ -336,63 +336,80 @@ void validate_no_overlap(const std::vector<ParsedSegment> &segments) {
 
 }  // namespace
 
-ElfLoadResult load_elf(std::span<const std::byte> image,
-                       AddressSpace &address_space) {
-  const ParsedHeader header = parse_header(image);
-  const std::vector<ParsedSegment> parsed_segments =
-      parse_load_segments(image, header, address_space);
-  validate_no_overlap(parsed_segments);
-
-  // Parsing, all bounds checks, destination checks, and overlap checks have
-  // completed.  From here on loadable() promises that in-range initialization
-  // cannot be rejected, so malformed ELF files never partially modify memory.
-  for (const ParsedSegment &segment : parsed_segments) {
-    apply_segment(image, segment, address_space);
+ElfLoadResult ImageLoadPlan::add_elf(std::span<const std::byte> image) {
+  const auto header = parse_header(image);
+  const auto segments = parse_load_segments(image, header, space_);
+  validate_no_overlap(segments);
+  ElfLoadResult result{header.entry, header.is_64_bit, {}};
+  std::vector<Chunk> additions;
+  for (const auto &segment : segments) {
+    const auto &info = segment.public_segment;
+    auto bytes = image.subspan(static_cast<std::size_t>(segment.file_offset),
+                               static_cast<std::size_t>(info.file_size));
+    additions.push_back({info, {bytes.begin(), bytes.end()}});
+    result.segments.push_back(info);
   }
-
-  ElfLoadResult result;
-  result.entry = header.entry;
-  result.is_64_bit = header.is_64_bit;
-  result.segments.reserve(parsed_segments.size());
-  for (const ParsedSegment &segment : parsed_segments) {
-    result.segments.push_back(segment.public_segment);
-  }
+  for (auto &chunk : additions) chunks_.push_back(std::move(chunk));
   return result;
 }
-
-ElfLoadResult load_elf(const std::filesystem::path &path,
-                       AddressSpace &address_space) {
-  const std::vector<std::byte> image = read_file(path);
-  return load_elf(image, address_space);
+ElfLoadResult ImageLoadPlan::add_elf(const std::filesystem::path &path) {
+  return add_elf(read_file(path));
 }
-
-void load_raw_image(std::span<const std::byte> image,
-                    AddressSpace &address_space, std::uint64_t address) {
-  if (image.empty()) {
-    return;
+void ImageLoadPlan::add_raw(std::span<const std::byte> image,
+                            std::uint64_t address) {
+  if (image.empty()) return;
+  ElfSegment segment{};
+  segment.load_address = address;
+  segment.file_size = segment.memory_size = image.size();
+  (void)checked_add(address, image.size(), "raw image range");
+  validate_load_target(space_, segment, 0);
+  chunks_.push_back({segment, {image.begin(), image.end()}});
+}
+void ImageLoadPlan::add_raw(const std::filesystem::path &path,
+                            std::uint64_t address) {
+  add_raw(read_file(path), address);
+}
+void ImageLoadPlan::apply() {
+  for (std::size_t i = 0; i < chunks_.size(); ++i) {
+    const auto &a = chunks_[i].segment;
+    validate_load_target(space_, a, i);
+    const auto *ma = space_.resolve(a.load_address, a.memory_size);
+    for (std::size_t j = 0; j < i; ++j) {
+      const auto &b = chunks_[j].segment;
+      const auto *mb = space_.resolve(b.load_address, b.memory_size);
+      const auto ao = a.load_address - ma->base;
+      const auto bo = b.load_address - mb->base;
+      if (ma->device == mb->device && ao < bo + b.memory_size &&
+          bo < ao + a.memory_size)
+        throw ElfError(
+            "image ranges overlap (including BSS or device aliases) at " +
+            hexadecimal(a.load_address));
+    }
   }
-  const AddressSpace::Mapping *mapping =
-      address_space.resolve(address, image.size());
-  if (mapping == nullptr) {
-    throw ElfError("raw image range at " + hexadecimal(address) +
-                   " does not fit one mapped device");
-  }
-  if (!mapping->device->loadable()) {
-    throw ElfError("raw image targets non-loadable device '" + mapping->name +
-                   "'");
-  }
-  if (!mapping->device->can_load(address - mapping->base, image.size())) {
-    throw ElfError("raw image exceeds device '" + mapping->name + "'");
-  }
-  if (!response_is_success(address_space.load(address, image))) {
-    throw ElfError("device rejected raw image at " + hexadecimal(address));
+  for (const auto &chunk : chunks_) {
+    ParsedSegment parsed{};
+    parsed.public_segment = chunk.segment;
+    apply_segment(chunk.data, parsed, space_);
   }
 }
-
-void load_raw_image(const std::filesystem::path &path,
-                    AddressSpace &address_space, std::uint64_t address) {
-  const std::vector<std::byte> image = read_file(path);
-  load_raw_image(image, address_space, address);
+ElfLoadResult load_elf(std::span<const std::byte> image, AddressSpace &space) {
+  ImageLoadPlan plan(space);
+  auto result = plan.add_elf(image);
+  plan.apply();
+  return result;
+}
+ElfLoadResult load_elf(const std::filesystem::path &path, AddressSpace &space) {
+  return load_elf(read_file(path), space);
+}
+void load_raw_image(std::span<const std::byte> image, AddressSpace &space,
+                    std::uint64_t address) {
+  ImageLoadPlan plan(space);
+  plan.add_raw(image, address);
+  plan.apply();
+}
+void load_raw_image(const std::filesystem::path &path, AddressSpace &space,
+                    std::uint64_t address) {
+  load_raw_image(read_file(path), space, address);
 }
 
 }  // namespace axi_tb

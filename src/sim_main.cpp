@@ -14,9 +14,9 @@
 
 #include "Vaxi_tb_dut.h"
 #include "config.hpp"
-#include "devices.hpp"
 #include "elf_loader.hpp"
 #include "fabric.hpp"
+#include "platform.hpp"
 #include "verilated.h"
 #include "verilated_binding.hpp"
 
@@ -60,11 +60,8 @@ volatile std::sig_atomic_t interrupted = 0;
 void handle_interrupt(int /*signal*/) { interrupted = 1; }
 
 struct Options {
-  std::optional<std::filesystem::path> elf;
-  std::optional<std::filesystem::path> rom_image;
-  std::optional<std::filesystem::path> ram_image;
-  std::optional<std::filesystem::path> uart_input;
-  std::optional<std::filesystem::path> uart_output;
+  std::vector<std::filesystem::path> elves;
+  std::vector<std::string> raw_images;
   std::optional<std::filesystem::path> trace;
   std::uint64_t max_cycles = 10'000'000;
   std::uint64_t reset_cycles = 5;
@@ -104,7 +101,8 @@ struct Options {
   return value;
 }
 
-[[nodiscard]] Options parse_options(int argc, char **argv) {
+[[nodiscard]] Options parse_options(int argc, char **argv,
+                                    axi_tb::PlatformSpec &spec) {
   Options options;
   auto argument = [&](int &index, std::string_view name) -> std::string_view {
     if (++index >= argc) {
@@ -117,15 +115,19 @@ struct Options {
     if (name == "--help" || name == "-h") {
       options.help = true;
     } else if (name == "--elf") {
-      options.elf = argument(index, name);
+      options.elves.emplace_back(argument(index, name));
     } else if (name == "--rom-image") {
-      options.rom_image = argument(index, name);
+      spec.set("rom.image=" + std::string(argument(index, name)));
     } else if (name == "--ram-image") {
-      options.ram_image = argument(index, name);
+      spec.set("ram.image=" + std::string(argument(index, name)));
     } else if (name == "--uart-in") {
-      options.uart_input = argument(index, name);
+      spec.set("uart.input=" + std::string(argument(index, name)));
     } else if (name == "--uart-out") {
-      options.uart_output = argument(index, name);
+      spec.set("uart.output=" + std::string(argument(index, name)));
+    } else if (name == "--set") {
+      spec.set(argument(index, name));
+    } else if (name == "--load") {
+      options.raw_images.emplace_back(argument(index, name));
     } else if (name == "--trace") {
       options.trace = argument(index, name);
     } else if (name == "--max-cycles") {
@@ -145,10 +147,6 @@ struct Options {
       throw std::invalid_argument("unknown option: " + std::string(name));
     }
   }
-  if (options.elf && (options.rom_image || options.ram_image)) {
-    throw std::invalid_argument(
-        "--elf cannot be combined with --rom-image or --ram-image");
-  }
   if (options.max_cycles == 0) {
     throw std::invalid_argument("--max-cycles must be greater than zero");
   }
@@ -165,7 +163,10 @@ void print_help(const char *program) {
   std::cout
       << "Usage: " << program << " [options]\n\n"
       << "Images:\n"
-      << "  --elf FILE             Load little-endian ELF32/ELF64 PT_LOADs\n"
+      << "  --elf FILE             Load ELF32/ELF64 PT_LOADs (repeatable)\n"
+      << "  --load TARGET=FILE     Load raw bytes at an address or mapped "
+         "instance\n"
+      << "  --set ID.OPTION=VALUE  Override a registered device property\n"
       << "  --rom-image FILE       Load a raw image at the ROM base\n"
       << "  --ram-image FILE       Load a raw image at the RAM base\n\n"
       << "Simulation:\n"
@@ -180,76 +181,6 @@ void print_help(const char *program) {
       << "  --uart-in FILE|-       Input bytes (default stdin)\n"
       << "  --uart-out FILE|-      Output bytes (default stdout)\n";
 }
-
-struct FileCloser {
-  void operator()(std::FILE *file) const noexcept {
-    if (file != nullptr) {
-      // Ownership is represented by unique_ptr's custom deleter.
-      // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-      std::fclose(file);
-    }
-  }
-};
-
-using OwnedFile = std::unique_ptr<std::FILE, FileCloser>;
-
-[[nodiscard]] std::FILE *open_file(
-    const std::optional<std::filesystem::path> &path, const char *mode,
-    std::FILE *standard, OwnedFile &owner, std::string_view description) {
-  if (!path || path->string() == "-") {
-    return standard;
-  }
-  // fopen transfers ownership directly into the unique_ptr wrapper.
-  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-  owner.reset(std::fopen(path->string().c_str(), mode));
-  if (!owner) {
-    throw std::runtime_error("cannot open " + std::string(description) + " '" +
-                             path->string() + "': " + std::strerror(errno));
-  }
-  return owner.get();
-}
-
-class TerminalGuard {
- public:
-  explicit TerminalGuard(std::FILE *input)
-#if defined(__unix__) || defined(__APPLE__)
-      : descriptor_(input == nullptr ? -1 : ::fileno(input))
-#endif
-  {
-#if defined(__unix__) || defined(__APPLE__)
-    if (descriptor_ >= 0 && ::isatty(descriptor_) != 0 &&
-        ::tcgetattr(descriptor_, &original_) == 0) {
-      termios raw = original_;
-      raw.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
-      raw.c_cc[VMIN] = 0;
-      raw.c_cc[VTIME] = 0;
-      active_ = ::tcsetattr(descriptor_, TCSANOW, &raw) == 0;
-    }
-#else
-    (void)input;
-#endif
-  }
-
-  TerminalGuard(const TerminalGuard &) = delete;
-  TerminalGuard &operator=(const TerminalGuard &) = delete;
-  TerminalGuard(TerminalGuard &&) = delete;
-  TerminalGuard &operator=(TerminalGuard &&) = delete;
-
-  ~TerminalGuard() {
-#if defined(__unix__) || defined(__APPLE__)
-    if (active_) {
-      ::tcsetattr(descriptor_, TCSANOW, &original_);
-    }
-#endif
-  }
-
- private:
-#if defined(__unix__) || defined(__APPLE__)
-  int descriptor_ = -1;
-  termios original_{};
-  bool active_ = false;
-#endif
-};
 
 template <typename Top, typename Trace>
 void evaluate(VerilatedContext &context, Top &top, Trace *trace) {
@@ -269,54 +200,43 @@ struct NullTrace {
   void close() noexcept {}
 };
 
-void load_images(const Options &options, axi_tb::AddressSpace &address_space) {
-  if (options.elf) {
-    const auto loaded = axi_tb::load_elf(*options.elf, address_space);
-    std::cerr << "[axi-tb] loaded " << loaded.segments.size()
-              << " ELF segment(s), entry=0x" << std::hex << loaded.entry
-              << std::dec << '\n';
-    return;
+void load_images(const Options &options, axi_tb::Platform &platform) {
+  auto &space = platform.address_space();
+  axi_tb::ImageLoadPlan plan(space);
+  for (const auto &image : platform.images())
+    plan.add_raw(image.path, image.address);
+  for (const auto &request : options.raw_images) {
+    const auto equal = request.find('=');
+    if (equal == request.npos)
+      throw std::invalid_argument("--load expects ADDRESS|INSTANCE=FILE");
+    const auto target = request.substr(0, equal);
+    std::optional<std::uint64_t> address;
+    for (const auto &mapping : space.mappings()) {
+      if (mapping.name == target) {
+        if (address)
+          throw std::invalid_argument("ambiguous load target: " + target);
+        address = mapping.base;
+      }
+    }
+    if (!address) address = axi_tb::parse_unsigned(target);
+    plan.add_raw(request.substr(equal + 1), *address);
   }
-  if (options.rom_image) {
-    axi_tb::load_raw_image(*options.rom_image, address_space,
-                           axi_tb::config::ROM_BASE);
+  for (const auto &path : options.elves) {
+    const auto loaded = plan.add_elf(path);
+    std::cerr << "[axi-tb] ELF " << path << ": " << loaded.segments.size()
+              << " segment(s), entry=0x" << std::hex << loaded.entry << std::dec
+              << '\n';
   }
-  if (options.ram_image) {
-    axi_tb::load_raw_image(*options.ram_image, address_space,
-                           axi_tb::config::RAM_BASE);
-  }
+  plan.apply();
 }
 
-int run_simulation(int argc, char **argv, const Options &options) {
-  if (axi_tb::config::ROM_SIZE > std::numeric_limits<std::size_t>::max() ||
-      axi_tb::config::RAM_SIZE > std::numeric_limits<std::size_t>::max()) {
-    throw std::runtime_error(
-        "configured ROM or RAM is too large for this host");
-  }
-
-  axi_tb::RomDevice rom(static_cast<std::size_t>(axi_tb::config::ROM_SIZE));
-  axi_tb::RamDevice ram(static_cast<std::size_t>(axi_tb::config::RAM_SIZE));
-  OwnedFile input_owner;
-  OwnedFile output_owner;
-  std::FILE *input =
-      open_file(options.uart_input, "rb", stdin, input_owner, "UART input");
-  std::FILE *output =
-      open_file(options.uart_output, "wb", stdout, output_owner, "UART output");
-  const TerminalGuard terminal(input);
-  axi_tb::FileUartBackend backend(input, output);
-  axi_tb::UartDevice uart(backend);
-  axi_tb::ExitDevice exit;
-  axi_tb::AddressSpace address_space;
-  address_space.map(axi_tb::config::ROM_BASE, axi_tb::config::ROM_SIZE, rom,
-                    "rom");
-  address_space.map(axi_tb::config::RAM_BASE, axi_tb::config::RAM_SIZE, ram,
-                    "ram");
-  address_space.map(axi_tb::config::UART_BASE, axi_tb::config::UART_SIZE, uart,
-                    "uart");
-  address_space.map(axi_tb::config::EXIT_BASE, axi_tb::config::EXIT_SIZE, exit,
-                    "exit");
-
-  load_images(options, address_space);
+int run_simulation(int argc, char **argv, const Options &options,
+                   const axi_tb::DeviceRegistry &registry,
+                   const axi_tb::PlatformSpec &spec) {
+  axi_tb::Platform platform(registry, spec, axi_tb::config::ADDRESS_BITS);
+  axi_tb::config::SidebandBinding sideband(platform);
+  auto &address_space = platform.address_space();
+  load_images(options, platform);
 
   using Binding = axi_tb::VerilatedAxiBinding<
       Vaxi_tb_dut, axi_tb::config::NUM_PORTS, axi_tb::config::ADDRESS_BITS,
@@ -334,7 +254,7 @@ int run_simulation(int argc, char **argv, const Options &options) {
     throw std::runtime_error(
         "generated Verilator model thread count does not match configuration");
   }
-  Fabric fabric(address_space);
+  Fabric fabric(address_space, false);
   fabric.set_seed(options.seed);
   fabric.set_stall_probability(options.stall_probability);
 
@@ -362,6 +282,8 @@ int run_simulation(int argc, char **argv, const Options &options) {
     while (active_cycles < options.max_cycles && interrupted == 0 &&
            !context.gotFinish()) {
       const bool reset = total_cycles < options.reset_cycles;
+      platform.begin_cycle(reset);
+      sideband.drive(top);
       top.clk = 0;
       top.aresetn = reset ? 0 : 1;
       Binding::drive(top, fabric.drive(reset));
@@ -370,13 +292,13 @@ int run_simulation(int argc, char **argv, const Options &options) {
       top.clk = 1;
       evaluate(context, top, trace_pointer);
       fabric.commit(sampled, reset);
+      platform.end_cycle(reset);
       ++total_cycles;
       if (!reset) {
         ++active_cycles;
       }
       if (fabric.exit_completed()) {
         const std::uint32_t guest_code = fabric.exit_code();
-        backend.flush();
         std::cerr << "[axi-tb] guest exit code " << guest_code << " (0x"
                   << std::hex << guest_code << std::dec << ") after "
                   << active_cycles << " cycle(s)\n";
@@ -399,7 +321,6 @@ int run_simulation(int argc, char **argv, const Options &options) {
     throw;
   }
 
-  backend.flush();
   if (interrupted != 0) {
     std::cerr << "[axi-tb] interrupted after " << active_cycles
               << " active cycle(s)\n";
@@ -418,12 +339,21 @@ int run_simulation(int argc, char **argv, const Options &options) {
 
 int main(int argc, char **argv) {
   try {
-    const Options options = parse_options(argc, argv);
+    axi_tb::DeviceRegistry registry;
+    axi_tb::register_builtin_devices(registry);
+    axi_tb::config::PlatformDefinition::register_devices(registry);
+    auto spec = axi_tb::config::PlatformDefinition::defaults(
+        {axi_tb::config::ROM_BASE, axi_tb::config::ROM_SIZE,
+         axi_tb::config::RAM_BASE, axi_tb::config::RAM_SIZE,
+         axi_tb::config::UART_BASE, axi_tb::config::UART_SIZE,
+         axi_tb::config::EXIT_BASE, axi_tb::config::EXIT_SIZE});
+    const Options options = parse_options(argc, argv, spec);
     if (options.help) {
       print_help(argv[0]);
+      registry.print_help(std::cout);
       return 0;
     }
-    return run_simulation(argc, argv, options);
+    return run_simulation(argc, argv, options, registry, spec);
   } catch (const axi_tb::ProtocolError &error) {
     std::cerr << "[axi-tb] AXI protocol error: " << error.what() << '\n';
     return PROTOCOL_ERROR;

@@ -31,6 +31,26 @@ struct ElfLoadResult {
   std::vector<ElfSegment> segments;
 };
 
+// Owns input bytes until apply(). Every range, including BSS and aliases of
+// the same device, is checked across all images before any device is changed.
+class ImageLoadPlan {
+ public:
+  explicit ImageLoadPlan(AddressSpace &space) : space_(space) {}
+  [[nodiscard]] ElfLoadResult add_elf(std::span<const std::byte> image);
+  [[nodiscard]] ElfLoadResult add_elf(const std::filesystem::path &path);
+  void add_raw(std::span<const std::byte> image, std::uint64_t address);
+  void add_raw(const std::filesystem::path &path, std::uint64_t address);
+  void apply();
+
+ private:
+  struct Chunk {
+    ElfSegment segment;
+    std::vector<std::byte> data;
+  };
+  AddressSpace &space_;
+  std::vector<Chunk> chunks_;
+};
+
 // Loads little-endian ELF32/ELF64 PT_LOAD segments.  p_paddr is used as the
 // bus address when nonzero, otherwise p_vaddr is used.  All segments are fully
 // validated (bounds, destination, and overlap) before memory is modified.

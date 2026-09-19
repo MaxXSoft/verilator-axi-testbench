@@ -252,11 +252,48 @@ void test_malformed_images_are_rejected_atomically() {
       [&] { (void)axi_tb::load_elf(make_elf32(), oversized_mapping); });
 }
 
+void test_combined_images() {
+  RomDevice rom(0x1000);
+  RamDevice ram(0x100);
+  AddressSpace space;
+  space.map(0, rom.size(), rom, "rom");
+  space.map(0x8000, ram.size(), ram, "ram");
+  space.map(0x9000, ram.size(), ram, "ram-alias");
+  const std::array<std::byte, 2> raw{std::byte{0x55}, std::byte{0xaa}};
+  axi_tb::ImageLoadPlan valid(space);
+  valid.add_raw(raw, 0);
+  (void)valid.add_elf(make_elf32());
+  valid.apply();
+  assert(rom.bytes()[0] == raw[0] && rom.bytes()[1] == raw[1]);
+  assert(rom.bytes()[0x100] == std::byte{0x13});
+  assert(ram.bytes()[3] == std::byte{0});
+  const auto check_overlap = [&](std::uint64_t address) {
+    axi_tb::ImageLoadPlan plan(space);
+    plan.add_raw(raw, 0x200);
+    (void)plan.add_elf(make_elf32());
+    plan.add_raw(raw, address);
+    expect_elf_error([&] { plan.apply(); });
+    assert(rom.bytes()[0x200] == std::byte{0});
+  };
+  check_overlap(0x102);   // File data.
+  check_overlap(0x106);   // BSS only.
+  check_overlap(0x9001);  // A second mapping of the same RAM.
+  axi_tb::ImageLoadPlan duplicate(space);
+  (void)duplicate.add_elf(make_elf32());
+  (void)duplicate.add_elf(make_elf32());
+  expect_elf_error([&] { duplicate.apply(); });
+  axi_tb::ImageLoadPlan bad(space);
+  bad.add_raw(raw, 0x200);
+  expect_elf_error([&] { bad.add_raw(raw, 0x100000); });
+  assert(rom.bytes()[0x200] == std::byte{0});
+}
+
 }  // namespace
 
 // Test assertions and helpers intentionally report failures by throwing.
 // NOLINTNEXTLINE(bugprone-exception-escape)
 int main() {
+  test_combined_images();
   test_elf32();
   test_elf64_and_path_loader();
   test_malformed_images_are_rejected_atomically();

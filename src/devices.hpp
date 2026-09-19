@@ -129,6 +129,7 @@ class UartDevice final : public Device {
   static constexpr std::uint8_t LCR_DLAB = 1U << 7U;
 
   UartDevice();
+  UartDevice(std::FILE *input, std::FILE *output);
   template <typename Backend>
   explicit UartDevice(Backend &backend) noexcept {
     bind_backend(backend);

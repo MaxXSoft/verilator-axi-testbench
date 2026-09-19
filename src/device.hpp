@@ -6,11 +6,27 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "axi.hpp"
 
 namespace axi_tb {
+
+// Stable, unidirectional sideband ports. Unconnected inputs read as zero.
+// Connections are resolved at startup, never by name in the simulation loop.
+struct Signal {
+  unsigned width = 1;
+  std::uint64_t value = 0;
+};
+
+struct InputSignal {
+  unsigned width = 1;
+  const Signal *source = nullptr;
+  [[nodiscard]] std::uint64_t value() const noexcept {
+    return source == nullptr ? 0 : source->value;
+  }
+};
 
 // Device accesses are beat-wide.  The enable/strobe span has one entry per
 // byte in data; a zero entry suppresses that lane.  Keeping a whole beat in a
@@ -76,6 +92,16 @@ class Device {
   [[nodiscard]] virtual std::uint32_t exit_code() const noexcept { return 0; }
 
   virtual void reset() noexcept {}
+  // tick runs once per active simulated clock, after AXI transactions commit.
+  // settle runs in connection order afterward; it must not advance time.
+  virtual void tick() {}
+  virtual void settle() noexcept {}
+  [[nodiscard]] virtual const Signal *output(std::string_view) const noexcept {
+    return nullptr;
+  }
+  [[nodiscard]] virtual InputSignal *input(std::string_view) noexcept {
+    return nullptr;
+  }
 
  protected:
   Device() = default;
@@ -123,6 +149,7 @@ class AddressSpace {
                               std::span<const std::byte> data);
 
   void reset() noexcept;
+  void freeze() noexcept { frozen_ = true; }
 
   [[nodiscard]] const std::vector<Mapping> &mappings() const noexcept {
     return mappings_;
@@ -133,6 +160,7 @@ class AddressSpace {
                                           std::uint64_t length) const noexcept;
 
   std::vector<Mapping> mappings_;
+  bool frozen_ = false;
 };
 
 [[nodiscard]] constexpr bool response_is_success(Response response) noexcept {
