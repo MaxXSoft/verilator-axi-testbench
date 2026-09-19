@@ -137,6 +137,13 @@ class UartDevice final : public Device {
   }
 
   void reset() noexcept override;
+  void tick() override;
+  void settle() noexcept override;
+  [[nodiscard]] const Signal *output(
+      std::string_view name) const noexcept override {
+    return name == "irq" ? &irq_ : nullptr;
+  }
+  void set_character_cycles(std::uint64_t cycles);
 
  private:
   using TryRead = bool (*)(void *, std::uint8_t &);
@@ -182,6 +189,14 @@ class UartDevice final : public Device {
   std::uint8_t modem_control_ = 0;
   std::uint8_t scratch_ = 0;
   std::uint8_t fifo_control_ = 0;
+  Signal irq_;
+  std::uint64_t character_cycles_ = 16;
+  std::uint64_t receive_idle_cycles_ = 0;
+  bool thre_pending_ = true;
+  bool tx_pending_ = false;
+  bool overrun_ = false;
+  std::uint8_t modem_status_ = 0xb0;
+  std::uint8_t modem_delta_ = 0;
 };
 
 class ExitDevice final : public Device {

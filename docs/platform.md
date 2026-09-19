@@ -71,7 +71,8 @@ instances, and invalid values fail startup. `--help` lists registered types
 and properties without constructing devices or opening files. Devices receive
 validated values and never parse argv themselves.
 
-ROM and RAM declare `size` and `image`; UART declares `input` and `output`.
+ROM and RAM declare `size` and `image`; UART declares `input`, `output`, and
+`character-cycles` (used for deterministic receive timeout timing).
 Factories may use `HostServices` for owned files and terminal input, or own
 other resources in the returned device. `DeviceType::image_option` optionally
 identifies a string property for a raw image loaded at the instance's sole

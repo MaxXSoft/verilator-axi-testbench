@@ -232,11 +232,15 @@ void register_builtin_devices(DeviceRegistry &registry) {
   registry.add(
       "uart",
       {{{"input", OptionKind::String, "-", "Input file, or - for stdin"},
-        {"output", OptionKind::String, "-", "Output file, or - for stdout"}},
+        {"output", OptionKind::String, "-", "Output file, or - for stdout"},
+        {"character-cycles", OptionKind::Unsigned, "16",
+         "Simulated cycles per RX timeout character", 1, UINT64_MAX / 4}},
        [](const DeviceConfig &c, HostServices &host) {
          auto *input = host.open_input(c.text("input"));
          auto *output = host.open_output(c.text("output"));
-         return std::make_unique<UartDevice>(input, output);
+         auto uart = std::make_unique<UartDevice>(input, output);
+         uart->set_character_cycles(c.number("character-cycles"));
+         return uart;
        },
        {}});
   registry.add("exit", {{},

@@ -1,6 +1,7 @@
 #include "devices.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <climits>
 #include <cstring>
@@ -440,9 +441,36 @@ void UartDevice::reset() noexcept {
   modem_control_ = 0;
   scratch_ = 0;
   fifo_control_ = 0;
+  irq_.value = 0;
+  receive_idle_cycles_ = 0;
+  thre_pending_ = true;
+  tx_pending_ = false;
+  overrun_ = false;
+  modem_status_ = 0xb0;  // CTS, DSR and DCD asserted by the host console.
+  modem_delta_ = 0;
+}
+
+void UartDevice::set_character_cycles(std::uint64_t cycles) {
+  if (cycles == 0 || cycles > UINT64_MAX / 4)
+    throw std::invalid_argument("UART character cycles out of range");
+  character_cycles_ = cycles;
+}
+void UartDevice::settle() noexcept {
+  irq_.value = (interrupt_identification() & 1U) == 0;
+}
+void UartDevice::tick() {
+  if (tx_pending_) {
+    tx_pending_ = false;
+    thre_pending_ = true;
+  }
+  if (!receive_fifo_.empty() && receive_idle_cycles_ < 4 * character_cycles_)
+    ++receive_idle_cycles_;
+  poll_input();
+  settle();
 }
 
 void UartDevice::poll_input() {
+  if ((modem_control_ & 0x10U) != 0) return;
   const std::size_t capacity = (fifo_control_ & 1U) != 0 ? 16U : 1U;
   while (receive_fifo_.size() < capacity) {
     std::uint8_t value = 0;
@@ -452,18 +480,28 @@ void UartDevice::poll_input() {
     if (!receive_fifo_.push(value)) {
       break;
     }
+    receive_idle_cycles_ = 0;
   }
 }
 
 std::uint8_t UartDevice::interrupt_identification() const noexcept {
   const std::uint8_t fifo_bits =
       (fifo_control_ & 1U) != 0 ? static_cast<std::uint8_t>(0xc0) : 0;
-  if ((interrupt_enable_ & 1U) != 0 && !receive_fifo_.empty()) {
+  if ((interrupt_enable_ & 4U) != 0 && overrun_)
+    return static_cast<std::uint8_t>(fifo_bits | 0x06U);
+  constexpr std::array<std::size_t, 4> TRIGGERS{1, 4, 8, 14};
+  const auto trigger =
+      (fifo_control_ & 1U) != 0 ? TRIGGERS[fifo_control_ >> 6U] : 1U;
+  if ((interrupt_enable_ & 1U) != 0 && receive_fifo_.size() >= trigger)
     return static_cast<std::uint8_t>(fifo_bits | 0x04U);
-  }
-  if ((interrupt_enable_ & 2U) != 0) {
+  if ((interrupt_enable_ & 1U) != 0 && !receive_fifo_.empty() &&
+      (fifo_control_ & 1U) != 0 &&
+      receive_idle_cycles_ >= 4 * character_cycles_)
+    return static_cast<std::uint8_t>(fifo_bits | 0x0cU);
+  if ((interrupt_enable_ & 2U) != 0 && thre_pending_)
     return static_cast<std::uint8_t>(fifo_bits | 0x02U);
-  }
+  if ((interrupt_enable_ & 8U) != 0 && modem_delta_ != 0)
+    return static_cast<std::uint8_t>(fifo_bits | 0x00U);
   return static_cast<std::uint8_t>(fifo_bits | 0x01U);
 }
 
@@ -478,23 +516,34 @@ std::uint8_t UartDevice::read_register(std::uint64_t index) {
       }
       const std::uint8_t value = receive_fifo_.front();
       receive_fifo_.pop();
+      receive_idle_cycles_ = 0;
       return value;
     }
     case 1:
       return (line_control_ & LCR_DLAB) != 0 ? divisor_high_
                                              : interrupt_enable_;
-    case 2:
-      return interrupt_identification();
+    case 2: {
+      const auto value = interrupt_identification();
+      if ((value & 0x0fU) == 2) thre_pending_ = false;
+      return value;
+    }
     case 3:
       return line_control_;
     case 4:
       return modem_control_;
-    case 5:
-      return static_cast<std::uint8_t>(
-          LSR_THR_EMPTY | LSR_TRANSMITTER_EMPTY |
-          (receive_fifo_.empty() ? 0U : LSR_DATA_READY));
-    case 6:
-      return 0;
+    case 5: {
+      const auto value = static_cast<std::uint8_t>(
+          (tx_pending_ ? 0 : LSR_THR_EMPTY | LSR_TRANSMITTER_EMPTY) |
+          (overrun_ ? 2U : 0U) | (receive_fifo_.empty() ? 0U : LSR_DATA_READY));
+      overrun_ = false;
+      return value;
+    }
+    case 6: {
+      const auto value =
+          static_cast<std::uint8_t>(modem_status_ | modem_delta_);
+      modem_delta_ = 0;
+      return value;
+    }
     case 7:
       return scratch_;
     default:
@@ -508,29 +557,60 @@ void UartDevice::write_register(std::uint64_t index, std::uint8_t value) {
       if ((line_control_ & LCR_DLAB) != 0) {
         divisor_low_ = value;
       } else {
-        backend_write_(backend_context_, value);
-        backend_flush_(backend_context_);
+        thre_pending_ = false;
+        tx_pending_ = true;
+        if ((modem_control_ & 0x10U) != 0) {
+          const auto capacity = (fifo_control_ & 1U) != 0 ? 16U : 1U;
+          if (receive_fifo_.size() >= capacity)
+            overrun_ = true;
+          else
+            (void)receive_fifo_.push(value);
+          receive_idle_cycles_ = 0;
+        } else {
+          backend_write_(backend_context_, value);
+          backend_flush_(backend_context_);
+        }
       }
       break;
     case 1:
       if ((line_control_ & LCR_DLAB) != 0) {
         divisor_high_ = value;
       } else {
+        if ((value & 2U) != 0 && (interrupt_enable_ & 2U) == 0 && !tx_pending_)
+          thre_pending_ = true;
         interrupt_enable_ = static_cast<std::uint8_t>(value & 0x0fU);
       }
       break;
     case 2:
-      fifo_control_ = value;
-      if ((value & 0x02U) != 0) {
+      if ((value & 0x02U) != 0 || ((value ^ fifo_control_) & 1U) != 0) {
         receive_fifo_.clear();
+        receive_idle_cycles_ = 0;
       }
+      if ((value & 0x04U) != 0) {
+        tx_pending_ = false;
+        thre_pending_ = true;
+      }
+      fifo_control_ = value & 0xc9U;
       break;
     case 3:
       line_control_ = value;
       break;
-    case 4:
-      modem_control_ = value;
+    case 4: {
+      const auto previous = modem_status_;
+      modem_control_ = value & 0x1fU;
+      modem_status_ = (value & 0x10U) == 0
+                          ? 0xb0
+                          : static_cast<std::uint8_t>(
+                                ((value & 2U) << 3U) | ((value & 1U) << 5U) |
+                                ((value & 4U) << 4U) | ((value & 8U) << 4U));
+      const auto changed =
+          static_cast<std::uint8_t>((previous ^ modem_status_) >> 4U);
+      // TERI is set on the trailing edge, unlike the other delta bits.
+      modem_delta_ |=
+          (changed & 0x0bU) |
+          ((previous & 0x40U) && !(modem_status_ & 0x40U) ? 4U : 0U);
       break;
+    }
     case 5:
     case 6:
       break;  // Read-only registers ignore writes, like a 16550.
@@ -553,6 +633,7 @@ Response UartDevice::read_impl(std::uint64_t offset, std::span<std::byte> data,
       data[lane] = static_cast<std::byte>(read_register(offset + lane));
     }
   }
+  settle();
   return Response::Okay;
 }
 
@@ -567,6 +648,7 @@ Response UartDevice::write_impl(std::uint64_t offset,
       write_register(offset + lane, as_u8(data[lane]));
     }
   }
+  settle();
   return Response::Okay;
 }
 
