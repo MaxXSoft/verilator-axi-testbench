@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 env:
-  LLVM_VERSION: "22"
+  LLVM_VERSION: "23"
   VERILATOR_VERSION: "5.048"
 
 jobs:

@@ -4,10 +4,13 @@
 
 namespace fuxi_sim {
 struct PlatformDefinition {
-  static void register_devices(axi_tb::DeviceRegistry &);
-  static axi_tb::PlatformSpec defaults(const axi_tb::DefaultMap &);
+  static void register_devices(axi_tb::DeviceRegistry &registry);
+  static axi_tb::PlatformSpec defaults(const axi_tb::DefaultMap &map);
 };
 struct SidebandBinding {
+  // This binding is a non-owning view that cannot rebind its signal endpoints.
+  // The platform outlives it, just as it outlives the AXI fabric.
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
   const axi_tb::Signal &msip, &mtip, &meip, &seip, &time;
   explicit SidebandBinding(axi_tb::Platform &p)
       : msip(p.output("clint.msip")),

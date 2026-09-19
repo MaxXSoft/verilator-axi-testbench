@@ -25,8 +25,8 @@ file(GLOB _axi_tb_host_tests CONFIGURE_DEPENDS
 foreach(_source IN LISTS _axi_tb_host_tests)
   axi_tb_add_host_test("${_source}")
 endforeach()
-target_sources(axi_tb_host_interrupt_devices PRIVATE
-  "${AXI_TB_ROOT_DIR}/examples/fuxi/sim/interrupt_devices.cpp")
+target_link_libraries(axi_tb_host_interrupt_devices PRIVATE axi_tb_fuxi_platform)
+target_link_libraries(axi_tb_host_fuxi_platform PRIVATE axi_tb_fuxi_platform)
 
 add_test(
   NAME core.cmake_invalid_address_map

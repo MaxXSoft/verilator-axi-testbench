@@ -17,7 +17,10 @@ template <typename Signal>
     if (index * 32U >= BITS) {
       return 0;
     }
-    using Unsigned = std::make_unsigned_t<Value>;
+    // Widen small packed scalars before bitwise arithmetic to avoid int
+    // promotion of uint8_t/uint16_t (including the complement operation).
+    using Unsigned = std::conditional_t<(sizeof(Value) < sizeof(unsigned)),
+                                        unsigned, std::make_unsigned_t<Value>>;
     return static_cast<std::uint32_t>(static_cast<Unsigned>(signal) >>
                                       (index * 32U));
   } else {
@@ -33,7 +36,10 @@ void set_word(Signal &signal, std::size_t index, std::uint32_t value) {
     if (index * 32U >= BITS) {
       throw std::out_of_range("packed signal word index");
     }
-    using Unsigned = std::make_unsigned_t<Value>;
+    // Widen small packed scalars before bitwise arithmetic to avoid int
+    // promotion of uint8_t/uint16_t (including the complement operation).
+    using Unsigned = std::conditional_t<(sizeof(Value) < sizeof(unsigned)),
+                                        unsigned, std::make_unsigned_t<Value>>;
     auto current = static_cast<Unsigned>(signal);
     const std::size_t shift = index * 32U;
     const Unsigned mask = static_cast<Unsigned>(UINT32_MAX) << shift;

@@ -17,9 +17,8 @@ set(_fuxi_uart_size 0x00000100)
 set(_fuxi_exit_base 0x10001000)
 set(_fuxi_exit_size 0x00000004)
 # Keep peripherals inside this version of Fuxi's uncached [0x10000000, 0x20000000).
-set(_fuxi_clint_base 0x11000000)
-set(_fuxi_plic_base 0x12000000)
-configure_file(sim/fuxi_platform.h.in generated/fuxi_platform.h @ONLY)
+get_target_property(_fuxi_platform_header axi_tb_fuxi_platform AXI_TB_PLATFORM_HEADER)
+get_filename_component(_fuxi_platform_include "${_fuxi_platform_header}" DIRECTORY)
 set(_riscv_common_software_dir
     "${CMAKE_CURRENT_LIST_DIR}/../riscv-common/software")
 
@@ -38,8 +37,6 @@ add_axi_testbench(
   PLATFORM_TYPE fuxi_sim::PlatformDefinition
   SIDEBAND_HEADER fuxi_platform.hpp
   SIDEBAND_TYPE fuxi_sim::SidebandBinding
-  CXX_SOURCES sim/fuxi_platform.cpp sim/interrupt_devices.cpp
-  INCLUDE_DIRS "${CMAKE_CURRENT_LIST_DIR}/sim" "${CMAKE_CURRENT_BINARY_DIR}/generated"
   NUM_AXI 3
   ADDR_WIDTH 32
   DATA_WIDTH 32
@@ -58,6 +55,8 @@ add_axi_testbench(
     -Wno-VARHIDDEN
 )
 
+target_link_libraries(fuxi_sim PRIVATE axi_tb_fuxi_platform)
+
 set(_riscv_tests_arguments)
 if(AXI_TB_FUXI_WITH_RISCV_TESTS)
   list(APPEND _riscv_tests_arguments WITH_RISCV_TESTS)
@@ -67,8 +66,8 @@ axi_tb_add_riscv_software(
   OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/software"
   REGRESSION_DIR "${CMAKE_CURRENT_LIST_DIR}/software"
   REGRESSION_SOURCES "${CMAKE_CURRENT_LIST_DIR}/software/peripheral_irq.S"
-  INCLUDE_DIRS "${CMAKE_CURRENT_BINARY_DIR}/generated"
-  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/fuxi_platform.h"
+  INCLUDE_DIRS "${_fuxi_platform_include}"
+  DEPENDS "${_fuxi_platform_header}"
   ${_riscv_tests_arguments}
   ROM_BASE ${_fuxi_rom_base}
   ROM_SIZE ${_fuxi_rom_size}

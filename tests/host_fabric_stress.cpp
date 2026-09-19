@@ -291,7 +291,7 @@ class StressHarness {
     }
 
     const auto id = driver.next_id++ & 0x0fU;
-    auto shape = random_shape(port, random_, id, statistics_);
+    const auto shape = random_shape(port, random_, id, statistics_);
     ++statistics_.port_transactions[port];
     if (random_.chance(1, 2)) {
       ++statistics_.writes;
@@ -320,7 +320,7 @@ class StressHarness {
       }
       input.b_ready = draining || random_.chance(2, 3);
     } else if (driver.read) {
-      auto &transaction = *driver.read;
+      const auto &transaction = *driver.read;
       if (!transaction.ar_done &&
           (transaction.ar_presented || transaction.ar_delay == 0)) {
         input.ar_valid = true;

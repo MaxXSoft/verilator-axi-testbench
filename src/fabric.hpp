@@ -74,7 +74,9 @@ class AxiFabric {
     if (reset_active) {
       if (!was_reset_) {
         reset_state();
-        if (reset_devices_) address_space_.reset();
+        if (reset_devices_) {
+          address_space_.reset();
+        }
       }
       was_reset_ = true;
       ++cycle_;
@@ -388,8 +390,8 @@ class AxiFabric {
       std::array<std::byte, DATA_BYTES> data{};
       const auto [first, count] = enabled_extent(mask);
       if (count != 0) {
-        auto data_span = std::span<std::byte>(data).subspan(first, count);
-        auto enable_span =
+        auto const data_span = std::span<std::byte>(data).subspan(first, count);
+        auto const enable_span =
             std::span<const std::uint8_t>(mask).subspan(first, count);
         const auto device_offset = base + first - route.mapping->base;
         response.response =
@@ -460,7 +462,7 @@ class AxiFabric {
 
   void process_write_commit(WriteRoute &route,
                             const BurstCursor<DATA_BYTES> &cursor) {
-    auto &destination = ports_[route.port].b;
+    auto const &destination = ports_[route.port].b;
     if (destination.full()) {
       return;
     }
@@ -539,7 +541,7 @@ class AxiFabric {
       clear_monitor(route.port, route.payload.id);
       return;
     }
-    auto *monitor = find_monitor(route.port, route.payload.id);
+    auto const *monitor = find_monitor(route.port, route.payload.id);
     if (monitor == nullptr || !(monitor->payload == route.payload)) {
       route.response = Response::Okay;
       clear_monitor(route.port, route.payload.id);
@@ -610,12 +612,14 @@ class AxiFabric {
       protocol_error(route.port, "AR", "exclusive monitor table exhausted",
                      &route.payload);
     }
-    *slot = ExclusiveMonitor{true,
-                             route.port,
-                             route.payload.id,
-                             route.payload,
-                             route.payload.address,
-                             route.payload.address + total};
+    *slot = ExclusiveMonitor{
+        true,
+        route.port,
+        route.payload.id,
+        route.payload,
+        route.payload.address,
+        route.payload.address + total,
+    };
   }
 
   [[nodiscard]] ExclusiveMonitor *find_monitor(std::size_t port,

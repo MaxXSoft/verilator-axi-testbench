@@ -104,7 +104,8 @@ struct Options {
 [[nodiscard]] Options parse_options(int argc, char **argv,
                                     axi_tb::PlatformSpec &spec) {
   Options options;
-  auto argument = [&](int &index, std::string_view name) -> std::string_view {
+  const auto argument = [&](int &index,
+                            std::string_view name) -> std::string_view {
     if (++index >= argc) {
       throw std::invalid_argument(std::string(name) + " requires an argument");
     }
@@ -203,22 +204,27 @@ struct NullTrace {
 void load_images(const Options &options, axi_tb::Platform &platform) {
   auto &space = platform.address_space();
   axi_tb::ImageLoadPlan plan(space);
-  for (const auto &image : platform.images())
+  for (const auto &image : platform.images()) {
     plan.add_raw(image.path, image.address);
+  }
   for (const auto &request : options.raw_images) {
     const auto equal = request.find('=');
-    if (equal == request.npos)
+    if (equal == std::string::npos) {
       throw std::invalid_argument("--load expects ADDRESS|INSTANCE=FILE");
+    }
     const auto target = request.substr(0, equal);
     std::optional<std::uint64_t> address;
     for (const auto &mapping : space.mappings()) {
       if (mapping.name == target) {
-        if (address)
+        if (address) {
           throw std::invalid_argument("ambiguous load target: " + target);
+        }
         address = mapping.base;
       }
     }
-    if (!address) address = axi_tb::parse_unsigned(target);
+    if (!address) {
+      address = axi_tb::parse_unsigned(target);
+    }
     plan.add_raw(request.substr(equal + 1), *address);
   }
   for (const auto &path : options.elves) {
@@ -234,7 +240,7 @@ int run_simulation(int argc, char **argv, const Options &options,
                    const axi_tb::DeviceRegistry &registry,
                    const axi_tb::PlatformSpec &spec) {
   axi_tb::Platform platform(registry, spec, axi_tb::config::ADDRESS_BITS);
-  axi_tb::config::SidebandBinding sideband(platform);
+  const axi_tb::config::SidebandBinding sideband(platform);
   auto &address_space = platform.address_space();
   load_images(options, platform);
 
@@ -342,11 +348,16 @@ int main(int argc, char **argv) {
     axi_tb::DeviceRegistry registry;
     axi_tb::register_builtin_devices(registry);
     axi_tb::config::PlatformDefinition::register_devices(registry);
-    auto spec = axi_tb::config::PlatformDefinition::defaults(
-        {axi_tb::config::ROM_BASE, axi_tb::config::ROM_SIZE,
-         axi_tb::config::RAM_BASE, axi_tb::config::RAM_SIZE,
-         axi_tb::config::UART_BASE, axi_tb::config::UART_SIZE,
-         axi_tb::config::EXIT_BASE, axi_tb::config::EXIT_SIZE});
+    auto spec = axi_tb::config::PlatformDefinition::defaults({
+        .rom_base = axi_tb::config::ROM_BASE,
+        .rom_size = axi_tb::config::ROM_SIZE,
+        .ram_base = axi_tb::config::RAM_BASE,
+        .ram_size = axi_tb::config::RAM_SIZE,
+        .uart_base = axi_tb::config::UART_BASE,
+        .uart_size = axi_tb::config::UART_SIZE,
+        .exit_base = axi_tb::config::EXIT_BASE,
+        .exit_size = axi_tb::config::EXIT_SIZE,
+    });
     const Options options = parse_options(argc, argv, spec);
     if (options.help) {
       print_help(argv[0]);

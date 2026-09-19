@@ -47,6 +47,8 @@ class ImageLoadPlan {
     ElfSegment segment;
     std::vector<std::byte> data;
   };
+  // The plan is bound to one address space, which outlives image loading.
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
   AddressSpace &space_;
   std::vector<Chunk> chunks_;
 };

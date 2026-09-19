@@ -52,13 +52,13 @@ template <typename Integer>
                                          const char *description) {
   static_assert(std::is_unsigned_v<Integer>);
   require_range(offset, sizeof(Integer), image.size(), description);
-  Integer value = 0;
+  std::uint64_t value = 0;
   for (std::size_t byte = 0; byte < sizeof(Integer); ++byte) {
-    value |= static_cast<Integer>(
+    value |= static_cast<std::uint64_t>(
                  std::to_integer<std::uint8_t>(image[offset + byte]))
              << (byte * 8U);
   }
-  return value;
+  return static_cast<Integer>(value);
 }
 
 [[nodiscard]] std::uint64_t checked_multiply(std::uint64_t lhs,
@@ -103,7 +103,7 @@ template <typename Integer>
   return bytes;
 }
 
-void validate_load_target(AddressSpace &address_space,
+void validate_load_target(AddressSpace const &address_space,
                           const ElfSegment &segment,
                           std::size_t program_header_index) {
   const AddressSpace::Mapping *mapping =
@@ -222,7 +222,7 @@ void apply_segment(std::span<const std::byte> image,
 
 [[nodiscard]] std::optional<ParsedSegment> parse_program_header(
     std::span<const std::byte> image, const ParsedHeader &header,
-    std::size_t index, AddressSpace &address_space) {
+    std::size_t index, AddressSpace const &address_space) {
   const auto offset =
       checked_add(header.program_header_offset,
                   checked_multiply(index, header.program_header_size,
@@ -302,7 +302,7 @@ void apply_segment(std::span<const std::byte> image,
 
 [[nodiscard]] std::vector<ParsedSegment> parse_load_segments(
     std::span<const std::byte> image, const ParsedHeader &header,
-    AddressSpace &address_space) {
+    const AddressSpace &address_space) {
   std::vector<ParsedSegment> segments;
   segments.reserve(header.program_header_count);
   for (std::size_t index = 0; index < header.program_header_count; ++index) {
@@ -340,16 +340,24 @@ ElfLoadResult ImageLoadPlan::add_elf(std::span<const std::byte> image) {
   const auto header = parse_header(image);
   const auto segments = parse_load_segments(image, header, space_);
   validate_no_overlap(segments);
-  ElfLoadResult result{header.entry, header.is_64_bit, {}};
+  ElfLoadResult result{
+      .entry = header.entry,
+      .is_64_bit = header.is_64_bit,
+      .segments = {},
+  };
   std::vector<Chunk> additions;
   for (const auto &segment : segments) {
     const auto &info = segment.public_segment;
-    auto bytes = image.subspan(static_cast<std::size_t>(segment.file_offset),
-                               static_cast<std::size_t>(info.file_size));
-    additions.push_back({info, {bytes.begin(), bytes.end()}});
+    const auto bytes =
+        image.subspan(static_cast<std::size_t>(segment.file_offset),
+                      static_cast<std::size_t>(info.file_size));
+    additions.push_back(
+        {.segment = info, .data = {bytes.begin(), bytes.end()}});
     result.segments.push_back(info);
   }
-  for (auto &chunk : additions) chunks_.push_back(std::move(chunk));
+  for (auto &chunk : additions) {
+    chunks_.push_back(std::move(chunk));
+  }
   return result;
 }
 ElfLoadResult ImageLoadPlan::add_elf(const std::filesystem::path &path) {
@@ -357,13 +365,15 @@ ElfLoadResult ImageLoadPlan::add_elf(const std::filesystem::path &path) {
 }
 void ImageLoadPlan::add_raw(std::span<const std::byte> image,
                             std::uint64_t address) {
-  if (image.empty()) return;
+  if (image.empty()) {
+    return;
+  }
   ElfSegment segment{};
   segment.load_address = address;
   segment.file_size = segment.memory_size = image.size();
   (void)checked_add(address, image.size(), "raw image range");
   validate_load_target(space_, segment, 0);
-  chunks_.push_back({segment, {image.begin(), image.end()}});
+  chunks_.push_back({.segment = segment, .data = {image.begin(), image.end()}});
 }
 void ImageLoadPlan::add_raw(const std::filesystem::path &path,
                             std::uint64_t address) {
@@ -380,10 +390,11 @@ void ImageLoadPlan::apply() {
       const auto ao = a.load_address - ma->base;
       const auto bo = b.load_address - mb->base;
       if (ma->device == mb->device && ao < bo + b.memory_size &&
-          bo < ao + a.memory_size)
+          bo < ao + a.memory_size) {
         throw ElfError(
             "image ranges overlap (including BSS or device aliases) at " +
             hexadecimal(a.load_address));
+      }
     }
   }
   for (const auto &chunk : chunks_) {

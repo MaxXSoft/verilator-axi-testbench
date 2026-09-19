@@ -17,8 +17,6 @@ Checks: >
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-pro-type-reinterpret-cast,
   google-*,
-  hicpp-avoid-goto,
-  hicpp-exception-baseclass,
   misc-*,
   -misc-include-cleaner,
   -misc-non-private-member-variables-in-classes,

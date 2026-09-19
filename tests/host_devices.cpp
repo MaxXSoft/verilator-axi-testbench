@@ -70,8 +70,12 @@ void test_address_space_and_memories() {
 
   const auto IMAGE = byte_array<4>({0x11, 0x22, 0x33, 0x44});
   assert(rom.load(4, IMAGE) == Response::Okay);
-  std::array<std::byte, 4> read_data{std::byte{0xff}, std::byte{0xff},
-                                     std::byte{0xff}, std::byte{0xff}};
+  std::array<std::byte, 4> read_data{
+      std::byte{0xff},
+      std::byte{0xff},
+      std::byte{0xff},
+      std::byte{0xff},
+  };
   const std::array<std::uint8_t, 4> SPARSE_ENABLE{1, 0, 1, 0};
   assert(space.read(4, read_data, SPARSE_ENABLE) == Response::Okay);
   assert(read_data[0] == std::byte{0x11});

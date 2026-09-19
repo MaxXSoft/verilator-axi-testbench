@@ -23,8 +23,8 @@ using axi_tb::RomDevice;
 template <typename Integer>
 void put_le(std::vector<std::byte> &image, std::size_t offset, Integer value) {
   for (std::size_t byte = 0; byte < sizeof(Integer); ++byte) {
-    image.at(offset + byte) =
-        static_cast<std::byte>((value >> (byte * 8U)) & 0xffU);
+    image.at(offset + byte) = static_cast<std::byte>(
+        (static_cast<std::uint64_t>(value) >> (byte * 8U)) & 0xffU);
   }
 }
 
@@ -126,8 +126,12 @@ void test_elf32() {
   space.map(0, rom.size(), rom, "rom");
   space.map(0x8000, ram.size(), ram, "ram");
 
-  const std::array<std::byte, 4> DIRTY{std::byte{0xff}, std::byte{0xff},
-                                       std::byte{0xff}, std::byte{0xff}};
+  const std::array<std::byte, 4> DIRTY{
+      std::byte{0xff},
+      std::byte{0xff},
+      std::byte{0xff},
+      std::byte{0xff},
+  };
   assert(rom.load(0x104, DIRTY) == Response::Okay);
   assert(ram.load(3, DIRTY) == Response::Okay);
 
@@ -164,8 +168,12 @@ void test_elf64_and_path_loader() {
   RamDevice ram(0x100);
   AddressSpace space;
   space.map(0x9000, ram.size(), ram, "ram64");
-  const std::array<std::byte, 4> DIRTY{std::byte{0xff}, std::byte{0xff},
-                                       std::byte{0xff}, std::byte{0xff}};
+  const std::array<std::byte, 4> DIRTY{
+      std::byte{0xff},
+      std::byte{0xff},
+      std::byte{0xff},
+      std::byte{0xff},
+  };
   assert(ram.load(4, DIRTY) == Response::Okay);
 
   const auto image = make_elf64();

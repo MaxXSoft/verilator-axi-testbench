@@ -290,6 +290,19 @@ Artifacts from these presets, host tests, Verilator, and Fuxi staging all
 remain under the repository's `build/` directory. Normal builds and
 tests do not need to run executables from `/private/tmp`.
 
+CI uses LLVM 23 for formatting, compilation, and clang-tidy. After configuring
+the default build, check the handwritten C++ with:
+
+```sh
+git ls-files -z -- '*.cpp' | xargs -0 clang-tidy -p build/default
+```
+
+On macOS, append `--extra-arg=-isysroot` and
+`--extra-arg="$(xcrun --show-sdk-path)"` to the clang-tidy command when using
+Homebrew LLVM. The default build includes the Fuxi C++ platform and its host
+test, so all handwritten translation units have compilation-database entries
+without elaborating the processor RTL or initializing submodules.
+
 ## Optional Fuxi Preset
 
 The default build does not access the Fuxi or riscv-tests submodules. The

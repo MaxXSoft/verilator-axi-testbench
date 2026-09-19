@@ -1,8 +1,8 @@
 #include <array>
 #include <cassert>
 
-#include "../examples/fuxi/sim/interrupt_devices.hpp"
 #include "devices.hpp"
+#include "interrupt_devices.hpp"
 #include "platform.hpp"
 
 namespace {
@@ -13,15 +13,17 @@ std::uint32_t read(Device &d, std::uint64_t offset) {
   constexpr std::array<std::uint8_t, 4> lanes{1, 1, 1, 1};
   assert(d.read(offset, data, lanes) == Response::Okay);
   std::uint32_t value = 0;
-  for (unsigned i = 0; i < 4; ++i)
+  for (unsigned i = 0; i < 4; ++i) {
     value |= std::to_integer<std::uint32_t>(data[i]) << (i * 8);
+  }
   return value;
 }
 void write(Device &d, std::uint64_t offset, std::uint32_t value) {
   std::array<std::byte, 4> data{};
   constexpr std::array<std::uint8_t, 4> lanes{1, 1, 1, 1};
-  for (unsigned i = 0; i < 4; ++i)
-    data[i] = std::byte((value >> (i * 8)) & 0xff);
+  for (unsigned i = 0; i < 4; ++i) {
+    data[i] = std::byte((value >> (i * 8)) & 0xffU);
+  }
   assert(d.write(offset, data, lanes) == Response::Okay);
 }
 void test_clint() {
@@ -31,7 +33,9 @@ void test_clint() {
   assert(read(c, 0) == 1 && c.output("msip")->value == 1);
   write(c, 0, 2);
   assert(read(c, 0) == 0);
-  for (unsigned i = 0; i < 7; ++i) c.tick();
+  for (unsigned i = 0; i < 7; ++i) {
+    c.tick();
+  }
   assert(read(c, 0xbff8) == 1);
   c.tick();
   assert(read(c, 0xbff8) == 2);
@@ -42,7 +46,9 @@ void test_clint() {
   assert(c.output("mtip")->value == 0);
   write(c, 0xbffc, 1);
   write(c, 0xbff8, 0xffffffff);
-  for (unsigned i = 0; i < 4; ++i) c.tick();
+  for (unsigned i = 0; i < 4; ++i) {
+    c.tick();
+  }
   assert(read(c, 0xbffc) == 2 && read(c, 0xbff8) == 0);
   std::array<std::byte, 8> wide{};
   constexpr std::array<std::uint8_t, 8> all{1, 1, 1, 1, 1, 1, 1, 1};
@@ -58,15 +64,19 @@ void test_clint() {
   assert(c.output("mtime")->value == 0 && c.output("msip")->value == 0 &&
          c.output("mtip")->value == 0);
 }
+// This stateful sequence follows a request through arbitration and completion.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void test_plic() {
   fuxi_sim::Plic p(63, 2);
-  axi_tb::Signal a, b, high;
+  axi_tb::Signal a;
+  axi_tb::Signal b;
+  axi_tb::Signal high;
   p.input("source2")->source = &a;
   p.input("source3")->source = &b;
   p.input("source40")->source = &high;
   assert(p.input("source0") == nullptr);
-  auto m = [&] { return p.output("context0")->value; };
-  auto s = [&] { return p.output("context1")->value; };
+  const auto m = [&] { return p.output("context0")->value; };
+  const auto s = [&] { return p.output("context1")->value; };
   write(p, 0, 7);
   assert(read(p, 0) == 0);
   write(p, 8, 3);
@@ -106,11 +116,11 @@ void test_plic() {
   // Source numbers above 31, priority zero masking and high lanes on a 64-bit
   // bus.
   high.value = 1;
-  write(p, 0x2084, 1U << 8);
+  write(p, 0x2084, 1U << 8U);
   p.settle();
-  assert(!s() && read(p, 0x1004) == (1U << 8));
-  write(p, 40 * 4, 0xffffffff);
-  assert(read(p, 40 * 4) == 7 && s());
+  assert(!s() && read(p, 0x1004) == (1U << 8U));
+  write(p, UINT64_C(40) * 4, 0xffffffff);
+  assert(read(p, UINT64_C(40) * 4) == 7 && s());
   std::array<std::byte, 8> wide{};
   constexpr std::array<std::uint8_t, 8> partial{0, 0, 0, 0, 1, 1, 0, 1};
   assert(p.read(0x201000, wide, partial) == Response::SlaveError);
@@ -127,24 +137,33 @@ void test_connected_uart() {
   axi_tb::BufferUartBackend backend;
   axi_tb::DeviceRegistry registry;
   registry.add("test-uart",
-               {{},
-                [&](const auto &, auto &) {
-                  return std::make_unique<axi_tb::UartDevice>(backend);
-                },
-                {}});
-  registry.add("plic", {{},
-                        [](const auto &, auto &) {
-                          return std::make_unique<fuxi_sim::Plic>();
-                        },
-                        {}});
+               {
+                   .options = {},
+                   .create =
+                       [&](const auto &, auto &) {
+                         return std::make_unique<axi_tb::UartDevice>(backend);
+                       },
+                   .image_option = {},
+               });
+  registry.add("plic", {
+                           .options = {},
+                           .create =
+                               [](const auto &, auto &) {
+                                 return std::make_unique<fuxi_sim::Plic>();
+                               },
+                           .image_option = {},
+                       });
   axi_tb::PlatformSpec spec;
-  spec.devices = {{"plic", "plic", {}}, {"uart", "test-uart", {}}};
-  spec.connections = {{"uart.irq", "plic.source10"}};
+  spec.devices = {
+      {.id = "plic", .type = "plic", .properties = {}},
+      {.id = "uart", .type = "test-uart", .properties = {}},
+  };
+  spec.connections = {{.source = "uart.irq", .destination = "plic.source10"}};
   axi_tb::Platform platform(registry, spec);
   auto &p = platform.device("plic");
   auto &u = platform.device("uart");
   write(p, 40, 1);
-  write(p, 0x2000, 1U << 10);
+  write(p, 0x2000, 1U << 10U);
   const std::array<std::byte, 1> rx_enable{std::byte{1}};
   constexpr std::array<std::uint8_t, 1> lane{1};
   assert(u.write(1, rx_enable, lane) == Response::Okay);
@@ -162,6 +181,8 @@ void test_connected_uart() {
   assert(platform.output("uart.irq").value == 0);
 }
 }  // namespace
+// Uncaught exceptions intentionally fail this standalone test executable.
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main() {
   test_clint();
   test_plic();

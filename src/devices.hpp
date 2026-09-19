@@ -172,6 +172,8 @@ class UartDevice final : public Device {
       std::span<const std::uint8_t> strobe) override;
 
   void poll_input();
+  void transmit(std::uint8_t value);
+  void set_modem_control(std::uint8_t value);
   [[nodiscard]] std::uint8_t read_register(std::uint64_t index);
   void write_register(std::uint64_t index, std::uint8_t value);
   [[nodiscard]] std::uint8_t interrupt_identification() const noexcept;

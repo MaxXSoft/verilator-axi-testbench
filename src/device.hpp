@@ -96,10 +96,11 @@ class Device {
   // settle runs in connection order afterward; it must not advance time.
   virtual void tick() {}
   virtual void settle() noexcept {}
-  [[nodiscard]] virtual const Signal *output(std::string_view) const noexcept {
+  [[nodiscard]] virtual const Signal *output(
+      std::string_view /*name*/) const noexcept {
     return nullptr;
   }
-  [[nodiscard]] virtual InputSignal *input(std::string_view) noexcept {
+  [[nodiscard]] virtual InputSignal *input(std::string_view /*name*/) noexcept {
     return nullptr;
   }
 

@@ -72,7 +72,7 @@ signals. See [the extension API](../../docs/platform.md) for other platforms.
 CLINT and PLIC are deliberately relocated into the existing core's uncached
 window. Their register offsets follow the conventional CLINT and standard
 PLIC layouts; they do not use the FPGA SoC's AXI INTC programming model.
-`generated/fuxi_platform.h` exports the CMake-selected peripheral bases and
+The generated `fuxi_platform.h` exports the CMake-selected peripheral bases and
 UART IRQ to both the simulator platform and the assembly guests.
 
 CLINT implements one hart: `msip` at `+0`, `mtimecmp` at `+0x4000`, and `mtime`

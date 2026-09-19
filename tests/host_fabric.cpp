@@ -281,8 +281,12 @@ void test_fixed_wrap_and_reset() {
   auto wrap = address(0x101c, 2);
   wrap.burst = axi_tb::Burst::Wrap;
   write_burst(fabric, inputs, 0, wrap,
-              std::array<std::uint32_t, 4>{0xaaaaaaaa, 0xbbbbbbbb, 0xcccccccc,
-                                           0xdddddddd});
+              std::array<std::uint32_t, 4>{
+                  0xaaaaaaaa,
+                  0xbbbbbbbb,
+                  0xcccccccc,
+                  0xdddddddd,
+              });
   check(ram_word(ram, 0x1c) == 0xaaaaaaaa &&
             ram_word(ram, 0x10) == 0xbbbbbbbb &&
             ram_word(ram, 0x14) == 0xcccccccc &&

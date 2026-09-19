@@ -15,15 +15,17 @@ class Clint final : public axi_tb::Device {
   void reset() noexcept override;
   void tick() override;
   void settle() noexcept override;
-  const axi_tb::Signal *output(std::string_view name) const noexcept override;
+  [[nodiscard]] const axi_tb::Signal *output(
+      std::string_view name) const noexcept override;
 
  private:
-  axi_tb::Response read_impl(std::uint64_t, std::span<std::byte>,
-                             std::span<const std::uint8_t>) override;
-  axi_tb::Response write_impl(std::uint64_t, std::span<const std::byte>,
-                              std::span<const std::uint8_t>) override;
+  axi_tb::Response read_impl(std::uint64_t offset, std::span<std::byte> data,
+                             std::span<const std::uint8_t> lanes) override;
+  axi_tb::Response write_impl(std::uint64_t offset,
+                              std::span<const std::byte> data,
+                              std::span<const std::uint8_t> lanes) override;
   std::uint64_t divider_, phase_ = 0, compare_ = UINT64_MAX;
-  axi_tb::Signal time_{64, 0}, timer_, software_;
+  axi_tb::Signal time_{.width = 64, .value = 0}, timer_, software_;
 };
 
 // Standard PLIC layout, level-sensitive gateways, priority 0..7.
@@ -33,16 +35,18 @@ class Plic final : public axi_tb::Device {
   explicit Plic(unsigned sources = 31, unsigned contexts = 2);
   void reset() noexcept override;
   void settle() noexcept override;
-  const axi_tb::Signal *output(std::string_view name) const noexcept override;
+  [[nodiscard]] const axi_tb::Signal *output(
+      std::string_view name) const noexcept override;
   axi_tb::InputSignal *input(std::string_view name) noexcept override;
 
  private:
-  axi_tb::Response read_impl(std::uint64_t, std::span<std::byte>,
-                             std::span<const std::uint8_t>) override;
-  axi_tb::Response write_impl(std::uint64_t, std::span<const std::byte>,
-                              std::span<const std::uint8_t>) override;
-  unsigned best(unsigned context) const noexcept;
-  bool enabled(unsigned context, unsigned source) const noexcept;
+  axi_tb::Response read_impl(std::uint64_t offset, std::span<std::byte> data,
+                             std::span<const std::uint8_t> lanes) override;
+  axi_tb::Response write_impl(std::uint64_t offset,
+                              std::span<const std::byte> data,
+                              std::span<const std::uint8_t> lanes) override;
+  [[nodiscard]] unsigned best(unsigned context) const noexcept;
+  [[nodiscard]] bool enabled(unsigned context, unsigned source) const noexcept;
   void notify() noexcept;
   std::uint32_t read_register(std::uint64_t offset);
   void write_register(std::uint64_t offset, std::uint32_t value);

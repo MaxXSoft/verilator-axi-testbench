@@ -7,6 +7,7 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "device.hpp"
@@ -14,7 +15,7 @@
 namespace axi_tb {
 
 using Properties = std::map<std::string, std::string, std::less<>>;
-enum class OptionKind { String, Unsigned, Boolean };
+enum class OptionKind : std::uint8_t { String, Unsigned, Boolean };
 struct DeviceOption {
   std::string name;
   OptionKind kind;
@@ -45,6 +46,8 @@ class HostServices {
   ~HostServices();
   HostServices(const HostServices &) = delete;
   HostServices &operator=(const HostServices &) = delete;
+  HostServices(HostServices &&) = delete;
+  HostServices &operator=(HostServices &&) = delete;
   std::FILE *open_input(const std::string &path);
   std::FILE *open_output(const std::string &path);
 
@@ -66,7 +69,7 @@ class DeviceRegistry {
  public:
   void add(std::string name, DeviceType type);
   [[nodiscard]] const DeviceType &type(std::string_view name) const;
-  [[nodiscard]] DeviceConfig configure(std::string_view type,
+  [[nodiscard]] DeviceConfig configure(std::string_view name,
                                        const Properties &properties) const;
   void print_help(std::ostream &stream) const;
 
@@ -114,14 +117,17 @@ class Platform {
            unsigned address_bits = 64);
   Platform(const Platform &) = delete;
   Platform &operator=(const Platform &) = delete;
+  Platform(Platform &&) = delete;
+  Platform &operator=(Platform &&) = delete;
+  ~Platform() = default;
   [[nodiscard]] AddressSpace &address_space() noexcept {
     return address_space_;
   }
   [[nodiscard]] Device &device(std::string_view id) const;
-  [[nodiscard]] const Signal &output(std::string_view endpoint,
+  [[nodiscard]] const Signal &output(std::string_view name,
                                      unsigned width = 1) const;
-  void begin_cycle(bool reset);
-  void end_cycle(bool reset);
+  void begin_cycle(bool reset_active);
+  void end_cycle(bool reset_active);
   void reset() noexcept;
   struct RawImage {
     std::string path;
@@ -130,6 +136,7 @@ class Platform {
   [[nodiscard]] const std::vector<RawImage> &images() const { return images_; }
 
  private:
+  void connect(const PlatformSpec &spec);
   void settle() noexcept;
   HostServices host_;
   std::map<std::string, std::unique_ptr<Device>, std::less<>> devices_;
@@ -140,15 +147,15 @@ class Platform {
 };
 
 struct DefaultPlatform {
-  static void register_devices(DeviceRegistry &) {}
+  static void register_devices(DeviceRegistry & /*registry*/) {}
   static PlatformSpec defaults(const DefaultMap &map) {
     return default_platform(map);
   }
 };
 struct NoSideband {
-  explicit NoSideband(Platform &) {}
+  explicit NoSideband(Platform & /*platform*/) {}
   template <typename Top>
-  void drive(Top &) const noexcept {}
+  void drive(Top & /*top*/) const noexcept {}
 };
 
 }  // namespace axi_tb
