@@ -138,7 +138,7 @@ class AxiFabric {
     std::size_t port = 0;
     AddressPayload payload{};
     std::size_t beat = 0;
-    AddressSpace::Mapping *mapping = nullptr;
+    const AddressSpace::Mapping *mapping = nullptr;
     Response forced_response = Response::Okay;
     bool exclusive = false;
   };
@@ -298,7 +298,7 @@ class AxiFabric {
     route.payload = payload;
     route.exclusive = payload.lock;
     const auto cursor = make_cursor(port, channel, payload);
-    AddressSpace::Mapping *mapping = nullptr;
+    const AddressSpace::Mapping *mapping = nullptr;
     bool decode_error = false;
     std::uint64_t address_limit = UINT64_MAX;
     if constexpr (AddressBits < 64) {

@@ -91,12 +91,6 @@ const AddressSpace::Mapping *AddressSpace::resolve(
   return &*position;
 }
 
-AddressSpace::Mapping *AddressSpace::resolve(std::uint64_t address,
-                                             std::uint64_t length) noexcept {
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-  return const_cast<Mapping *>(std::as_const(*this).resolve(address, length));
-}
-
 Response AddressSpace::resolution_error(std::uint64_t address,
                                         std::uint64_t length) const noexcept {
   (void)length;
@@ -121,7 +115,7 @@ Response AddressSpace::read(std::uint64_t address, std::span<std::byte> data,
   if (data.empty()) {
     return Response::Okay;
   }
-  Mapping *mapping = resolve(address, data.size());
+  const Mapping *mapping = resolve(address, data.size());
   if (mapping == nullptr) {
     return resolution_error(address, data.size());
   }
@@ -138,7 +132,7 @@ Response AddressSpace::write(std::uint64_t address,
   if (data.empty()) {
     return Response::Okay;
   }
-  Mapping *mapping = resolve(address, data.size());
+  const Mapping *mapping = resolve(address, data.size());
   if (mapping == nullptr) {
     return resolution_error(address, data.size());
   }
@@ -150,7 +144,7 @@ Response AddressSpace::load(std::uint64_t address,
   if (data.empty()) {
     return Response::Okay;
   }
-  Mapping *mapping = resolve(address, data.size());
+  const Mapping *mapping = resolve(address, data.size());
   if (mapping == nullptr) {
     return resolution_error(address, data.size());
   }

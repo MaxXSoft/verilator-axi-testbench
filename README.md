@@ -326,9 +326,11 @@ During configuration, only the files required by Fuxi are copied into a build
 staging directory. Fuxi's sbt build then generates `Fuxi.v` inside that stage.
 Neither submodule checkout is modified, and
 the staged Fuxi sources are not rewritten. Fuxi's three ports are mapped in
-instruction/data/uncached order, its timer and external IRQs are tied low, and
-its soft IRQ is driven only by the opt-in MMIO test hook. The integration
-asserts that the legacy AXI3 `WID` remains 0.
+instruction/data/uncached order. Its C++ CLINT supplies timer/software IRQs,
+and its PLIC routes UART IRQ 10 to M/S contexts. The opt-in MMIO software-IRQ
+test hook remains available. The integration asserts that the legacy AXI3
+`WID` remains 0. See the [Fuxi platform description](examples/fuxi/README.md)
+for addresses and the current core’s M/S IRQ and time-CSR limitations.
 
 The reusable RISC-V toolchain discovery, runtime, linker script, basic guests,
 and upstream `riscv-tests` manifest live under `examples/riscv-common/`.
@@ -337,7 +339,8 @@ Fuxi-specific assembly regressions, RTL, and elaboration glue remain under
 files.
 
 The optional tests include UART/Exit smoke tests, an xRET/pending-IRQ
-regression, four AXI-response access-fault regressions, and 59 RV32I/M/A guests
+regression, CLINT/PLIC M/S interrupt delivery, raw-ROM plus ELF boot, four
+AXI-response access-fault regressions, and 59 RV32I/M/A guests
 compiled directly from the upstream assembly. The xRET regression uses a
 software-set supervisor pending interrupt and does not depend on an external
 adapter IRQ. The MMIO interrupt regression uses an otherwise disabled Fuxi

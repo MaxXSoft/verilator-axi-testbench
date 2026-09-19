@@ -2,12 +2,17 @@
 #include <cassert>
 #include <sstream>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 #include "devices.hpp"
 #include "platform.hpp"
 
 namespace {
 using namespace axi_tb;
+static_assert(
+    std::is_same_v<decltype(std::declval<AddressSpace &>().resolve(0, 1)),
+                   const AddressSpace::Mapping *>);
 struct Counter final : Device {
   Signal out;
   InputSignal in;

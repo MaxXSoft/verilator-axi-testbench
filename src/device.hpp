@@ -134,8 +134,6 @@ class AddressSpace {
   // that one mapping.  Mapping pointers remain valid until the next map().
   [[nodiscard]] const Mapping *resolve(std::uint64_t address,
                                        std::uint64_t length) const noexcept;
-  [[nodiscard]] Mapping *resolve(std::uint64_t address,
-                                 std::uint64_t length) noexcept;
 
   [[nodiscard]] Response read(std::uint64_t address, std::span<std::byte> data,
                               std::span<const std::uint8_t> enable);
