@@ -3,6 +3,12 @@ function(axi_tb_add_host_test source)
   set(_target "axi_tb_${_stem}")
   add_executable("${_target}" "${source}")
   target_compile_features("${_target}" PRIVATE cxx_std_20)
+  # Host tests use assert() for checks and bus transactions even in Release.
+  if(MSVC)
+    target_compile_options("${_target}" PRIVATE /UNDEBUG)
+  else()
+    target_compile_options("${_target}" PRIVATE -UNDEBUG)
+  endif()
   target_include_directories("${_target}" PRIVATE "${AXI_TB_ROOT_DIR}/src")
   target_link_libraries("${_target}" PRIVATE axi_tb::core)
   add_test(NAME "core.${_stem}" COMMAND "${_target}")
@@ -19,6 +25,8 @@ file(GLOB _axi_tb_host_tests CONFIGURE_DEPENDS
 foreach(_source IN LISTS _axi_tb_host_tests)
   axi_tb_add_host_test("${_source}")
 endforeach()
+target_sources(axi_tb_host_interrupt_devices PRIVATE
+  "${AXI_TB_ROOT_DIR}/examples/fuxi/sim/interrupt_devices.cpp")
 
 add_test(
   NAME core.cmake_invalid_address_map

@@ -13,3 +13,7 @@ A DUT example can include `cmake/RiscvTests.cmake`, call
 `axi_tb_add_riscv_software()`, and optionally pass `REGRESSION_DIR` to add the
 named protocol regression guests supplied by that DUT. The Fuxi example is the
 reference consumer.
+
+Additional example-specific guests can be passed through `REGRESSION_SOURCES`,
+with extra `INCLUDE_DIRS` and explicit `DEPENDS` for generated platform headers.
+The internal image helper also accepts `BINARY` for raw boot-ROM output.

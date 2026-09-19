@@ -9,7 +9,13 @@ module fuxi_axi_adapter #(
   parameter int unsigned DATA_WIDTH = 32,
   parameter int unsigned ID_WIDTH   = 4
 ) (
-  `AXI_TB_INITIATOR_PORTS
+  `AXI_TB_INITIATOR_PORTS,
+  input logic irq_msip,
+  input logic irq_mtip,
+  input logic irq_meip,
+  input logic irq_seip,
+  // Reserved for a future core time/timeh input; current Fuxi has no such port.
+  input logic [63:0] rtc_time
 );
 
   logic [3:0] inst_wid;
@@ -74,9 +80,11 @@ module fuxi_axi_adapter #(
   FuxiWrapper fuxi (
     .clk              (clk),
     .rst              (~aresetn),
-    .irq_timer        (1'b0),
-    .irq_soft         (irq_soft),
-    .irq_extern       (1'b0),
+    .irq_timer        (irq_mtip),
+    .irq_soft         (irq_soft | irq_msip),
+    // This core aliases its one external input into both M/S pending bits.
+    // Preserve separate simulator outputs for a future core interface upgrade.
+    .irq_extern       (irq_meip | irq_seip),
     .debug_wen        (),
     .debug_waddr      (),
     .debug_wdata      (),

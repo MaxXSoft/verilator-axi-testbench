@@ -1,0 +1,9 @@
+#pragma once
+
+#define FUXI_CLINT_BASE @_fuxi_clint_base@
+#define FUXI_CLINT_SIZE 0x00010000
+#define FUXI_PLIC_BASE @_fuxi_plic_base@
+#define FUXI_PLIC_SIZE 0x04000000
+#define FUXI_UART_IRQ 10
+// Default mtime rate: one tick per active CPU clock (divider = 1).
+#define FUXI_TIMEBASE_HZ 50000000

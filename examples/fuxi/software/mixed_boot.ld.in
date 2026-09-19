@@ -1,0 +1,2 @@
+OUTPUT_ARCH(riscv)
+SECTIONS { .text @_fuxi_rom_base@ : { KEEP(*(.text.init)) } }

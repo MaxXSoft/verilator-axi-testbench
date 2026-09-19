@@ -16,6 +16,10 @@ set(_fuxi_uart_base 0x10000000)
 set(_fuxi_uart_size 0x00000100)
 set(_fuxi_exit_base 0x10001000)
 set(_fuxi_exit_size 0x00000004)
+# Keep peripherals inside this version of Fuxi's uncached [0x10000000, 0x20000000).
+set(_fuxi_clint_base 0x11000000)
+set(_fuxi_plic_base 0x12000000)
+configure_file(sim/fuxi_platform.h.in generated/fuxi_platform.h @ONLY)
 set(_riscv_common_software_dir
     "${CMAKE_CURRENT_LIST_DIR}/../riscv-common/software")
 
@@ -30,6 +34,12 @@ add_axi_testbench(
   RTL_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/rtl/fuxi_axi_adapter.sv"
     ${_fuxi_rtl}
+  PLATFORM_HEADER fuxi_platform.hpp
+  PLATFORM_TYPE fuxi_sim::PlatformDefinition
+  SIDEBAND_HEADER fuxi_platform.hpp
+  SIDEBAND_TYPE fuxi_sim::SidebandBinding
+  CXX_SOURCES sim/fuxi_platform.cpp sim/interrupt_devices.cpp
+  INCLUDE_DIRS "${CMAKE_CURRENT_LIST_DIR}/sim" "${CMAKE_CURRENT_BINARY_DIR}/generated"
   NUM_AXI 3
   ADDR_WIDTH 32
   DATA_WIDTH 32
@@ -56,6 +66,9 @@ axi_tb_add_riscv_software(
   TARGET fuxi_software
   OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/software"
   REGRESSION_DIR "${CMAKE_CURRENT_LIST_DIR}/software"
+  REGRESSION_SOURCES "${CMAKE_CURRENT_LIST_DIR}/software/peripheral_irq.S"
+  INCLUDE_DIRS "${CMAKE_CURRENT_BINARY_DIR}/generated"
+  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/fuxi_platform.h"
   ${_riscv_tests_arguments}
   ROM_BASE ${_fuxi_rom_base}
   ROM_SIZE ${_fuxi_rom_size}
@@ -82,6 +95,28 @@ axi_tb_add_riscv_software(
 )
 add_dependencies(fuxi_sim fuxi_software)
 
+# A real raw ROM boot stub jumping into a separately loaded RAM-only ELF.
+_axi_tb_find_riscv_toolchain(_mixed_clang _mixed_lld)
+foreach(_image IN ITEMS mixed_boot mixed_payload)
+  configure_file("software/${_image}.ld.in" "software/${_image}.ld" @ONLY)
+  set(_format)
+  set(_extension elf)
+  if(_image STREQUAL "mixed_boot")
+    set(_format BINARY)
+    set(_extension bin)
+  endif()
+  _axi_tb_add_riscv_elf(
+    TARGET "fuxi_${_image}" ${_format}
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/software/${_image}.${_extension}"
+    LINKER_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/software/${_image}.ld"
+    CLANG "${_mixed_clang}" LLD "${_mixed_lld}"
+    SOURCES "${CMAKE_CURRENT_LIST_DIR}/software/${_image}.S"
+    DEFINITIONS "AXI_TB_ROM_BASE=${_fuxi_rom_base}"
+      "AXI_TB_RAM_BASE=${_fuxi_ram_base}" "AXI_TB_EXIT_BASE=${_fuxi_exit_base}"
+      "AXI_TB_RESET_PC=0x200")
+  add_dependencies(fuxi_software "fuxi_${_image}")
+endforeach()
+
 if(BUILD_TESTING)
   function(_fuxi_add_expected_test name elf expected_result max_cycles)
     set(_expected_output_argument)
@@ -101,6 +136,19 @@ if(BUILD_TESTING)
         -P "${_riscv_common_software_dir}/run_expect.cmake"
     )
   endfunction()
+
+  add_test(NAME fuxi_mixed_rom_elf
+    COMMAND "${CMAKE_COMMAND}"
+      "-DPROGRAM=$<TARGET_FILE:fuxi_sim>"
+      "-DELF=${CMAKE_CURRENT_BINARY_DIR}/software/mixed_payload.elf"
+      "-DEXTRA_ARGUMENTS=--rom-image;${CMAKE_CURRENT_BINARY_DIR}/software/mixed_boot.bin"
+      -DEXPECTED_RESULT=0 -DMAX_CYCLES=1000000 -DSTALL_PROBABILITY=0.35 -DSEED=12345
+      -P "${_riscv_common_software_dir}/run_expect.cmake")
+  set_tests_properties(fuxi_mixed_rom_elf PROPERTIES LABELS "fuxi;smoke;loader" TIMEOUT 120)
+
+  _fuxi_add_expected_test(fuxi_peripheral_irq
+    "${CMAKE_CURRENT_BINARY_DIR}/software/smoke/peripheral_irq.elf" 0 1000000)
+  set_tests_properties(fuxi_peripheral_irq PROPERTIES LABELS "fuxi;peripheral;interrupt" TIMEOUT 120)
 
   _fuxi_add_expected_test(fuxi_smoke_pass
     "${_fuxi_pass_elf}" 0 1000000)

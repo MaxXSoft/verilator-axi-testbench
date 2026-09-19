@@ -1,0 +1,9 @@
+OUTPUT_ARCH(riscv)
+ENTRY(_start)
+PHDRS { code PT_LOAD FLAGS(5); data PT_LOAD FLAGS(6); }
+SECTIONS {
+  .text @_fuxi_ram_base@ : { *(.text) } :code
+  .data : ALIGN(16) { *(.data) } :data
+  .bss (NOLOAD) : ALIGN(16) { *(.bss) } :data
+  /DISCARD/ : { *(.comment) *(.note*) }
+}

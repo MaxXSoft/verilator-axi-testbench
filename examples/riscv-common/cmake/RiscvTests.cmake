@@ -221,8 +221,8 @@ endfunction()
 
 function(_axi_tb_add_riscv_elf)
   set(_one_value TARGET OUTPUT LINKER_SCRIPT CLANG LLD)
-  set(_multi_value SOURCES INCLUDE_DIRS DEFINITIONS)
-  cmake_parse_arguments(PARSE_ARGV 0 ELF "" "${_one_value}" "${_multi_value}")
+  set(_multi_value SOURCES INCLUDE_DIRS DEFINITIONS DEPENDS)
+  cmake_parse_arguments(PARSE_ARGV 0 ELF "BINARY" "${_one_value}" "${_multi_value}")
   foreach(_required TARGET OUTPUT LINKER_SCRIPT CLANG LLD SOURCES)
     if(NOT ELF_${_required})
       message(FATAL_ERROR "_axi_tb_add_riscv_elf(): ${_required} is required")
@@ -243,6 +243,10 @@ function(_axi_tb_add_riscv_elf)
     list(APPEND _definition_flags "-D${_definition}")
   endforeach()
 
+  set(_format_flags)
+  if(ELF_BINARY)
+    list(APPEND _format_flags "-Wl,--oformat=binary")
+  endif()
   add_custom_command(
     OUTPUT "${ELF_OUTPUT}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${_output_dir}" "${_tmp_dir}"
@@ -257,10 +261,12 @@ function(_axi_tb_add_riscv_elf)
       "-fuse-ld=${ELF_LLD}"
       ${_include_flags}
       ${_definition_flags}
+      ${_format_flags}
       ${ELF_SOURCES}
       "-Wl,--image-base=0,--no-relax,--gc-sections,--build-id=none,-T,${ELF_LINKER_SCRIPT}"
       -o "${ELF_OUTPUT}"
     DEPENDS
+      ${ELF_DEPENDS}
       ${ELF_SOURCES}
       "${ELF_LINKER_SCRIPT}"
       "${AXI_TB_RISCV_COMMON_DIR}/software/include/axi_tb_platform.h"
@@ -300,7 +306,8 @@ function(axi_tb_add_riscv_software)
     OUT_ACCESS_DCACHE_WRITEBACK
     OUT_RISCV_NAMES OUT_RISCV_ELFS OUT_MA_DATA
   )
-  cmake_parse_arguments(PARSE_ARGV 0 SW "${_options}" "${_one_value}" "")
+  cmake_parse_arguments(PARSE_ARGV 0 SW "${_options}" "${_one_value}"
+    "REGRESSION_SOURCES;INCLUDE_DIRS;DEPENDS")
   if(SW_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR
       "axi_tb_add_riscv_software(): unknown arguments: ${SW_UNPARSED_ARGUMENTS}")
@@ -389,6 +396,7 @@ function(axi_tb_add_riscv_software)
     endforeach()
   endif()
 
+  list(APPEND _smoke_sources ${SW_REGRESSION_SOURCES})
   foreach(_smoke_source IN LISTS _smoke_sources)
     if(NOT EXISTS "${_smoke_source}")
       message(FATAL_ERROR "RISC-V guest source is missing: ${_smoke_source}")
@@ -405,7 +413,8 @@ function(axi_tb_add_riscv_software)
       SOURCES
         "${_runtime}"
         "${_smoke_source}"
-      INCLUDE_DIRS "${_software_include}"
+      INCLUDE_DIRS "${_software_include}" ${SW_INCLUDE_DIRS}
+      DEPENDS ${SW_DEPENDS}
       DEFINITIONS ${_definitions}
     )
     add_dependencies("${SW_TARGET}" "${_target}")
