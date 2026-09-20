@@ -12,6 +12,7 @@
 #if defined(__unix__) || defined(__APPLE__)
 #include <poll.h>
 #include <sys/mman.h>
+#include <sys/select.h>
 #include <unistd.h>
 #define AXI_TB_HAS_POSIX_MMAP 1
 #else
@@ -40,6 +41,31 @@ namespace {
   return std::ranges::all_of(lanes,
                              [](std::uint8_t value) { return value != 0; });
 }
+
+#if defined(__unix__) || defined(__APPLE__)
+[[nodiscard]] bool input_ready(int descriptor) {
+#ifdef __APPLE__
+  // A single zero-timeout poll() probe is expensive on Darwin.
+  // select() preserves per-cycle input latency without that setup overhead.
+  if (descriptor < FD_SETSIZE) {
+    fd_set readable;
+    FD_ZERO(&readable);
+    FD_SET(descriptor, &readable);
+    timeval timeout{};
+    return ::select(descriptor + 1, &readable, nullptr, nullptr, &timeout) > 0;
+  }
+#endif
+  pollfd descriptor_state{
+      .fd = descriptor,
+      .events = POLLIN | POLLHUP,
+      .revents = 0,
+  };
+  const int result = ::poll(&descriptor_state, 1, 0);
+  return result > 0 && (static_cast<unsigned>(descriptor_state.revents) &
+                        (static_cast<unsigned>(POLLIN) |
+                         static_cast<unsigned>(POLLHUP))) != 0;
+}
+#endif
 
 }  // namespace
 
@@ -360,18 +386,7 @@ bool FileUartBackend::try_read(std::uint8_t &byte) {
   }
 #if defined(__unix__) || defined(__APPLE__)
   const int descriptor = ::fileno(input_);
-  if (descriptor < 0) {
-    return false;
-  }
-  pollfd descriptor_state{
-      .fd = descriptor,
-      .events = POLLIN | POLLHUP,
-      .revents = 0,
-  };
-  const int result = ::poll(&descriptor_state, 1, 0);
-  if (result <= 0 ||
-      (static_cast<unsigned>(descriptor_state.revents) &
-       (static_cast<unsigned>(POLLIN) | static_cast<unsigned>(POLLHUP))) == 0) {
+  if (descriptor < 0 || !input_ready(descriptor)) {
     return false;
   }
 #else

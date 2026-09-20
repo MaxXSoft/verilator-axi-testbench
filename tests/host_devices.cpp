@@ -10,6 +10,10 @@
 
 #include "devices.hpp"
 
+#if defined(__unix__) || defined(__APPLE__)
+#include <unistd.h>
+#endif
+
 namespace {
 
 using axi_tb::AddressSpace;
@@ -219,6 +223,35 @@ void test_file_uart_backend() {
   std::fclose(output);
 }
 
+void test_pipe_uart_backend() {
+#if defined(__unix__) || defined(__APPLE__)
+  std::array<int, 2> descriptors{};
+  assert(::pipe(descriptors.data()) == 0);
+  // This test owns the C stream and closes it after the non-owning backend.
+  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+  auto *input = ::fdopen(descriptors[0], "r");
+  assert(input != nullptr);
+  std::setvbuf(input, nullptr, _IONBF, 0);
+  {
+    FileUartBackend backend(input, nullptr);
+    std::uint8_t byte = 0;
+    assert(!backend.try_read(byte));  // An open, empty pipe must not block.
+    constexpr std::array<char, 2> BYTES{'A', 'B'};
+    assert(::write(descriptors[1], BYTES.data(), BYTES.size()) == 2);
+    assert(backend.try_read(byte) && byte == 'A');
+    assert(backend.try_read(byte) && byte == 'B');
+    assert(!backend.try_read(byte));
+    // A later write must become visible without closing the writer.
+    assert(::write(descriptors[1], BYTES.data(), 1) == 1);
+    assert(backend.try_read(byte) && byte == 'A');
+    assert(::close(descriptors[1]) == 0);
+    assert(!backend.try_read(byte));  // EOF/hangup is also nonblocking.
+  }
+  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+  std::fclose(input);
+#endif
+}
+
 void test_exit_device() {
   ExitDevice exit;
   const auto CODE = byte_array<4>({0xef, 0xbe, 0xad, 0xde});
@@ -259,6 +292,7 @@ int main() {
   test_address_space_and_memories();
   test_uart();
   test_file_uart_backend();
+  test_pipe_uart_backend();
   test_exit_device();
   return 0;
 }
