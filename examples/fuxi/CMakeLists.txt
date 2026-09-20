@@ -65,7 +65,9 @@ axi_tb_add_riscv_software(
   TARGET fuxi_software
   OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/software"
   REGRESSION_DIR "${CMAKE_CURRENT_LIST_DIR}/software"
-  REGRESSION_SOURCES "${CMAKE_CURRENT_LIST_DIR}/software/peripheral_irq.S"
+  REGRESSION_SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/software/peripheral_irq.S"
+    "${CMAKE_CURRENT_LIST_DIR}/software/sv32_redirect.S"
   INCLUDE_DIRS "${_fuxi_platform_include}"
   DEPENDS "${_fuxi_platform_header}"
   ${_riscv_tests_arguments}
@@ -144,6 +146,10 @@ if(BUILD_TESTING)
       -DEXPECTED_RESULT=0 -DMAX_CYCLES=1000000 -DSTALL_PROBABILITY=0.35 -DSEED=12345
       -P "${_riscv_common_software_dir}/run_expect.cmake")
   set_tests_properties(fuxi_mixed_rom_elf PROPERTIES LABELS "fuxi;smoke;loader" TIMEOUT 120)
+
+  _fuxi_add_expected_test(fuxi_sv32_redirect
+    "${CMAKE_CURRENT_BINARY_DIR}/software/smoke/sv32_redirect.elf" 0 1000000)
+  set_tests_properties(fuxi_sv32_redirect PROPERTIES LABELS "fuxi;mmu;sv32" TIMEOUT 120)
 
   _fuxi_add_expected_test(fuxi_peripheral_irq
     "${CMAKE_CURRENT_BINARY_DIR}/software/smoke/peripheral_irq.elf" 0 1000000)
