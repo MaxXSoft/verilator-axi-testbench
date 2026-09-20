@@ -71,8 +71,19 @@ instances, and invalid values fail startup. `--help` lists registered types
 and properties without constructing devices or opening files. Devices receive
 validated values and never parse argv themselves.
 
-ROM and RAM declare `size` and `image`; UART declares `input`, `output`, and
-`character-cycles` (used for deterministic receive timeout timing).
+ROM and RAM declare `size` and `image`; UART declares `input`, `output`,
+`character-cycles` (used for deterministic receive timeout timing), and
+`input-poll-cycles` (default 1024). After an empty host input read, the UART
+waits that many active cycles before trying again; guest MMIO reads do not
+bypass this wait. Available bytes refill the FIFO immediately, subject to
+FIFO capacity. Reset clears the pending wait. The FIFO, RX timeout, TX and
+IRQ state machines still advance every active cycle.
+
+Use `--set uart.input-poll-cycles=1` for the original immediate polling
+behavior. Direct C++ `UartDevice` instances also default to immediate polling,
+so buffer-backed tests keep deterministic input timing unless they explicitly
+set a larger interval.
+
 Factories may use `HostServices` for owned files and terminal input, or own
 other resources in the returned device. `DeviceType::image_option` optionally
 identifies a string property for a raw image loaded at the instance's sole

@@ -77,8 +77,11 @@ mappings on macOS and Linux when available, with a standard container fallback
 elsewhere. Every AXI port shares the same RAM object. The UART implements
 RBR/THR, the LSR DR/THRE/TEMT bits, and the common DLAB, DLL/DLM, IER, LCR,
 MCR, and SCR initialization registers. Its optional `irq` output implements
-16550 receive, FIFO timeout, THRE, overrun, and modem-status interrupts. RX is
-polled every active cycle, and loopback supports driver probes. FIFO triggers
+16550 receive, FIFO timeout, THRE, overrun, and modem-status interrupts. RX
+state advances every active cycle, and loopback supports driver probes. After
+an empty host read, input polling waits `input-poll-cycles` (default 1024);
+set it to 1 for immediate polling. Pending input fills the FIFO without an
+inter-byte polling delay. FIFO triggers
 are 1/4/8/14 bytes; the timeout is four `character-cycles` (default 16 cycles
 per character). TX completes on the next device tick. Exact baud timing and
 physical modem lines are not modeled; excess host input is backpressured. Reset clears fabric, arbitration,

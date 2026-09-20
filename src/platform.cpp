@@ -303,6 +303,14 @@ void register_builtin_devices(DeviceRegistry &registry) {
                       .minimum = 1,
                       .maximum = UINT64_MAX / 4,
                   },
+                  {
+                      .name = "input-poll-cycles",
+                      .kind = OptionKind::Unsigned,
+                      .default_value = "1024",
+                      .help = "Cycles between empty host input polls (1 for "
+                              "immediate polling)",
+                      .minimum = 1,
+                  },
               },
           .create =
               [](const DeviceConfig &c, HostServices &host) {
@@ -310,6 +318,7 @@ void register_builtin_devices(DeviceRegistry &registry) {
                 auto *output = host.open_output(c.text("output"));
                 auto uart = std::make_unique<UartDevice>(input, output);
                 uart->set_character_cycles(c.number("character-cycles"));
+                uart->set_input_poll_cycles(c.number("input-poll-cycles"));
                 return uart;
               },
           .image_option = {},

@@ -137,9 +137,11 @@ preset, then run from the GeeOS directory:
 GeeOS's simulation ROM stub is eight bytes linked at reset PC `0x200`; load it
 at that address. The ELF supplies the RAM kernel and embedded user filesystem.
 GeeOS sets up its own M-mode timer handler before entering S-mode, so this
-boot path does not use SBI firmware. Memory initialization fills almost all
-128 MiB and can take several hundred million simulated cycles; the normal
-10-million-cycle simulator limit is too short.
+boot path does not use SBI firmware. GeeOS's `fuxi_sim` target uses the first
+4 MiB of the platform's 128 MiB RAM, with 128 KiB reserved for the kernel heap.
+Its aligned, word-at-a-time `memset` retains free-page debug fills while
+reducing initialization time. The command above also budgets for scheduling
+and interactive programs after initialization.
 
 For interactive verification, use GeeOS's `tests/fuxi_sim_smoke.py`:
 
@@ -151,8 +153,9 @@ python3 tests/fuxi_sim_smoke.py \
 It checks shell startup, `hello`, `alloc`, a missing command, a second `hello`,
 and `notepad` with repeated UART input. Add `--stall-probability 0.35` to test
 with AXI backpressure. Logs are written under GeeOS's `build/` directory.
-The full 128 MiB image has passed these checks with normal timer interrupts,
-both without backpressure and with 35% AXI stalls.
+The 4 MiB image passes these checks with normal timer interrupts, both without
+backpressure and with 35% AXI stalls. The earlier 128 MiB image was also
+validated; the smaller target provides a faster default for development.
 
 ## Added regressions and image loading
 

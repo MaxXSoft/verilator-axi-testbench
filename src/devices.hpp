@@ -97,6 +97,7 @@ class FileUartBackend final {
  private:
   std::FILE *input_;
   std::FILE *output_;
+  int input_descriptor_ = -1;
 };
 
 class BufferUartBackend final {
@@ -144,6 +145,9 @@ class UartDevice final : public Device {
     return name == "irq" ? &irq_ : nullptr;
   }
   void set_character_cycles(std::uint64_t cycles);
+  // One preserves immediate backend polling; larger values back off after
+  // an empty read. FIFO handling and interrupt timing still tick every cycle.
+  void set_input_poll_cycles(std::uint64_t cycles);
 
  private:
   using TryRead = bool (*)(void *, std::uint8_t &);
@@ -194,6 +198,8 @@ class UartDevice final : public Device {
   Signal irq_;
   std::uint64_t character_cycles_ = 16;
   std::uint64_t receive_idle_cycles_ = 0;
+  std::uint64_t input_poll_cycles_ = 1;
+  std::uint64_t input_poll_remaining_ = 0;
   bool thre_pending_ = true;
   bool tx_pending_ = false;
   bool overrun_ = false;

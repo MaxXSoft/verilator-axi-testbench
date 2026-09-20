@@ -378,15 +378,20 @@ bool RamDevice::can_load(std::uint64_t offset,
 }
 
 FileUartBackend::FileUartBackend(std::FILE *input, std::FILE *output) noexcept
-    : input_(input), output_(output) {}
+    : input_(input), output_(output) {
+#if defined(__unix__) || defined(__APPLE__)
+  if (input_ != nullptr) {
+    input_descriptor_ = ::fileno(input_);
+  }
+#endif
+}
 
 bool FileUartBackend::try_read(std::uint8_t &byte) {
   if (input_ == nullptr) {
     return false;
   }
 #if defined(__unix__) || defined(__APPLE__)
-  const int descriptor = ::fileno(input_);
-  if (descriptor < 0 || !input_ready(descriptor)) {
+  if (input_descriptor_ < 0 || !input_ready(input_descriptor_)) {
     return false;
   }
 #else
@@ -462,6 +467,7 @@ void UartDevice::reset() noexcept {
   fifo_control_ = 0;
   irq_.value = 0;
   receive_idle_cycles_ = 0;
+  input_poll_remaining_ = 0;
   thre_pending_ = true;
   tx_pending_ = false;
   overrun_ = false;
@@ -475,10 +481,20 @@ void UartDevice::set_character_cycles(std::uint64_t cycles) {
   }
   character_cycles_ = cycles;
 }
+void UartDevice::set_input_poll_cycles(std::uint64_t cycles) {
+  if (cycles == 0) {
+    throw std::invalid_argument("UART input poll cycles must be positive");
+  }
+  input_poll_cycles_ = cycles;
+  input_poll_remaining_ = 0;
+}
 void UartDevice::settle() noexcept {
   irq_.value = (interrupt_identification() & 1U) == 0;
 }
 void UartDevice::tick() {
+  if (input_poll_remaining_ != 0) {
+    --input_poll_remaining_;
+  }
   if (tx_pending_) {
     tx_pending_ = false;
     thre_pending_ = true;
@@ -491,13 +507,14 @@ void UartDevice::tick() {
 }
 
 void UartDevice::poll_input() {
-  if ((modem_control_ & 0x10U) != 0) {
+  if ((modem_control_ & 0x10U) != 0 || input_poll_remaining_ != 0) {
     return;
   }
   const std::size_t capacity = (fifo_control_ & 1U) != 0 ? 16U : 1U;
   while (receive_fifo_.size() < capacity) {
     std::uint8_t value = 0;
     if (!backend_try_read_(backend_context_, value)) {
+      input_poll_remaining_ = input_poll_cycles_ == 1 ? 0 : input_poll_cycles_;
       break;
     }
     if (!receive_fifo_.push(value)) {
