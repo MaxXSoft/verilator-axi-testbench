@@ -143,10 +143,10 @@ Its aligned, word-at-a-time `memset` retains free-page debug fills while
 reducing initialization time. The command above also budgets for scheduling
 and interactive programs after initialization.
 
-For interactive verification, use GeeOS's `tests/fuxi_sim_smoke.py`:
+For interactive verification, use GeeOS's `tests/smoke/fuxi_sim_smoke.py`:
 
 ```sh
-python3 tests/fuxi_sim_smoke.py \
+python3 tests/smoke/fuxi_sim_smoke.py \
   --simulator /path/to/verilator-axi-testbench/build/fuxi/examples/fuxi/fuxi_sim
 ```
 
