@@ -29,8 +29,9 @@ The uncached region is `0x10000000..0x1fffffff`; UART and guest exit are at
 `0x10000000` and `0x10001000`.  Guest code starts at Fuxi's reset PC `0x200`,
 while data and BSS are loaded into executable RAM beginning at `0x80000000`.
 
-The `fuxi_software` target builds four general smoke guests, three interrupt
-guests, a raw-ROM/RAM-ELF boot pair, two SFENCE maintenance guests, four AXI-response fault guests, and
+The `fuxi_software` target builds four general smoke guests, four interrupt
+guests, an Sv32 fetch-redirect guest, a raw-ROM/RAM-ELF boot pair, two SFENCE
+maintenance guests, four AXI-response fault guests, and
 exactly 59 default upstream ISA guests (41 I including `fence_i`, 8 M, and
 10 A).  The xRET guest uses a
 software-pending supervisor interrupt and therefore does not need an external
@@ -107,8 +108,8 @@ loopback for driver probing. Baud-accurate serial timing is not modeled.
 
 The peripherals now supply the console, local timer/software interrupt and
 external interrupt controller needed for GeeOS and an initramfs-based Linux
-bring-up. OS boot itself is not validated here. A GeeOS `fuxi_sim` target
-should use the map above; the existing FPGA `fuxi` target can keep AXI INTC.
+bring-up. GeeOS has a separate `fuxi_sim` target for the map above; its FPGA
+`fuxi` target keeps AXI INTC. See the boot instructions below.
 Device-tree generation, SBI firmware, storage/virtio, and processor privilege,
 MMU and CSR changes remain separate work.
 
@@ -120,6 +121,38 @@ semantics when both contexts are active. A later core upgrade can wire the
 already separate `irq_meip` and `irq_seip` inputs independently. Likewise,
 `rtc_time` carries CLINT mtime to the adapter boundary but is unused inside
 the current core: it does not implement `time/timeh` CSR behavior by itself.
+
+## Booting GeeOS
+
+Build the [GeeOS](https://github.com/MaxXSoft/GeeOS) with `TARGET=fuxi_sim DEBUG=0`,
+using its README's YuLang/LLVM/LLD toolchain options. Run `make clean` first
+when changing optimization settings. Build this repository with the `fuxi`
+preset, then run from the GeeOS directory:
+
+```sh
+/path/to/verilator-axi-testbench/build/fuxi/examples/fuxi/fuxi_sim \
+  --load 0x200=build/boot.bin --elf build/geeos.elf --max-cycles 2000000000
+```
+
+GeeOS's simulation ROM stub is eight bytes linked at reset PC `0x200`; load it
+at that address. The ELF supplies the RAM kernel and embedded user filesystem.
+GeeOS sets up its own M-mode timer handler before entering S-mode, so this
+boot path does not use SBI firmware. Memory initialization fills almost all
+128 MiB and can take several hundred million simulated cycles; the normal
+10-million-cycle simulator limit is too short.
+
+For interactive verification, use GeeOS's `tests/fuxi_sim_smoke.py`:
+
+```sh
+python3 tests/fuxi_sim_smoke.py \
+  --simulator /path/to/verilator-axi-testbench/build/fuxi/examples/fuxi/fuxi_sim
+```
+
+It checks shell startup, `hello`, `alloc`, a missing command, a second `hello`,
+and `notepad` with repeated UART input. Add `--stall-probability 0.35` to test
+with AXI backpressure. Logs are written under GeeOS's `build/` directory.
+The full 128 MiB image has passed these checks with normal timer interrupts,
+both without backpressure and with 35% AXI stalls.
 
 ## Added regressions and image loading
 
