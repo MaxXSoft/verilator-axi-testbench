@@ -16,6 +16,7 @@ jobs:
     name: Format, build, clang-tidy, and tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    if: "!contains(github.event.head_commit.message, 'skip-ci')"
 
     steps:
       - name: Checkout
