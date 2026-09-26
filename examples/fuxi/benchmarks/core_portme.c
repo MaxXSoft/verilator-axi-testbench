@@ -1,5 +1,5 @@
-#include "coremark.h"
 #include "benchmark.h"
+#include "coremark.h"
 
 volatile ee_s32 seed1_volatile = 0;
 volatile ee_s32 seed2_volatile = 0;

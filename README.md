@@ -224,6 +224,7 @@ my_core_sim [options]
   --uart-in FILE|-           UART input; default stdin, and - also means stdin
   --uart-out FILE|-          UART output; default stdout, and - also means stdout
   --seed N                   Fabric random-stall seed; default 1
+  --stats                    Print full-run cycles and per-port AXI read traffic
   --stall-probability P      AW/W/AR READY stall probability in [0,1]; default 0
   --trace FILE               Write the build-selected VCD or FST trace
   +NAME[=VALUE]              Pass a plusarg through to the Verilated RTL unchanged

@@ -1,0 +1,21 @@
+execute_process(COMMAND "${PROGRAM}" --max-cycles 1000 --reset-cycles 5
+    --stall-probability 0.8 --seed 12345 --stats
+  RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
+if(NOT result EQUAL 0)
+  message(FATAL_ERROR "Stats fixture failed: ${result}\n${stdout}\n${stderr}")
+endif()
+if(NOT stderr MATCHES "SIM_STATS active_cycles=[1-9][0-9]*")
+  message(FATAL_ERROR "Missing active-cycle statistics: ${stderr}")
+endif()
+# The fixture accepts exactly one read despite repeated VALID under stalls.
+if(NOT stderr MATCHES "AXI_STATS port=0 read_requests=1 read_bytes_requested=${READ_BYTES} read_beats_received=1")
+  message(FATAL_ERROR "Wrong port-zero handshake count: ${stderr}")
+endif()
+if(NUM_PORTS GREATER 1)
+  math(EXPR last "${NUM_PORTS} - 1")
+  foreach(port RANGE 1 ${last})
+    if(NOT stderr MATCHES "AXI_STATS port=${port} read_requests=0 read_bytes_requested=0 read_beats_received=0")
+      message(FATAL_ERROR "Inactive port ${port} has traffic: ${stderr}")
+    endif()
+  endforeach()
+endif()

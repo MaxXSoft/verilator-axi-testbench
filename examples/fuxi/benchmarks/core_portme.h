@@ -26,7 +26,9 @@ typedef uint32_t CORE_TICKS;
 #define MAIN_HAS_NORETURN 0
 #define PERFORMANCE_RUN 1
 extern ee_u32 default_num_contexts;
-typedef struct CORE_PORTABLE_S { ee_u8 portable_id; } core_portable;
+typedef struct CORE_PORTABLE_S {
+  ee_u8 portable_id;
+} core_portable;
 void portable_init(core_portable *p, int *argc, char *argv[]);
 void portable_fini(core_portable *p);
 int ee_printf(const char *format, ...);

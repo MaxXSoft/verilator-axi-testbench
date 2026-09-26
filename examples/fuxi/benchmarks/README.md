@@ -63,3 +63,23 @@ all guest and simulator output. For frontend comparisons, freeze the old RTL
 source and build directory, replay the **same IMA ELF** on both simulators,
 then run the matching IMAC ELF on the new simulator. This separates pipeline
 effects from compiler instruction encoding and layout changes.
+
+The runner enables simulator `--stats` to collect accepted AR requests,
+requested burst bytes and completed R beats per AXI port. In this Fuxi adapter,
+port 0 is instruction traffic, port 1 is data and port 2 is uncached. These
+traffic totals span the **entire run**, including startup, printing, and
+validation; they do not share the benchmark CSR measurement interval. They
+measure off-core traffic, not cache hit counts or frontend empty cycles.
+`SIM_STATS active_cycles=N` reports full-run active cycles. With `--stats`,
+SIGTERM is handled like SIGINT so interactive harnesses can collect final
+statistics while stopping a guest; the process exits with `128 + signal`.
+
+For a separate layout-controlled comparison, configure with
+`AXI_TB_FUXI_BENCHMARK_FIXED_LAYOUT=ON`. This adds four `*-fixed-rodata.elf`
+variants, leaving the natural-layout images unchanged. Both IMA and IMAC
+place `.rodata` at ROM address `0x5000`; linker assertions reject text that
+reaches that address or a changed placement. Mutable data and stack addresses
+remain identical. This prevents code compression from moving constants into
+different direct-mapped D-cache sets. It does not eliminate changed branch
+predictor aliasing or the intended I-cache/code-layout effects. Keep these
+results separate from the natural-layout primary comparison.

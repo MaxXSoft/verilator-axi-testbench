@@ -46,7 +46,7 @@ def main():
     args = parser.parse_args()
     command = [str(args.simulator.resolve()), "--elf", str(args.elf.resolve()),
                "--max-cycles", str(args.max_cycles), "--stall-probability",
-               str(args.stall_probability), "--seed", str(args.seed)]
+               str(args.stall_probability), "--seed", str(args.seed), "--stats"]
     started = time.monotonic()
     result = subprocess.run(command, text=True, capture_output=True, check=False)
     elapsed = time.monotonic() - started
@@ -73,6 +73,15 @@ def main():
         "command": command, "elf_sha256": hashlib.sha256(args.elf.read_bytes()).hexdigest(),
         "simulator_sha256": hashlib.sha256(args.simulator.read_bytes()).hexdigest(),
     }
+    report["full_run_axi_reads"] = [
+        {"port": int(port), "requests": int(requests),
+         "bytes_requested": int(size), "beats_received": int(beats)}
+        for port, requests, size, beats in re.findall(
+            r"AXI_STATS port=(\d+) read_requests=(\d+) read_bytes_requested=(\d+) "
+            r"read_beats_received=(\d+)", result.stderr)
+    ]
+    if len(report["full_run_axi_reads"]) != 3:
+        raise ValueError("Expected full-run AXI read statistics for all three Fuxi ports")
     if name == "dhrystone":
         report["dmips_per_mhz"] = iterations * 1000000 / (cycles * 1757)
         report["score_note"] = "Short simulated run; normalized Dhrystone 2.1 estimate"

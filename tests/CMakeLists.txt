@@ -158,6 +158,14 @@ function(axi_tb_add_runtime_shape suffix num_axi addr_width data_width id_width)
     LABELS "core;protocol;rtl"
     TIMEOUT 30
   )
+  math(EXPR _read_bytes "${data_width} / 8")
+  add_test(NAME "protocol.stats_${suffix}"
+    COMMAND "${CMAKE_COMMAND}"
+      "-DPROGRAM=$<TARGET_FILE:${_target}>" "-DREAD_BYTES=${_read_bytes}"
+      "-DNUM_PORTS=${num_axi}"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_stats.cmake")
+  set_tests_properties("protocol.stats_${suffix}" PROPERTIES
+    LABELS "core;protocol;rtl;stats" TIMEOUT 30)
 
   if(suffix STREQUAL "32x32_n1" AND
      (AXI_TB_ENABLE_TRACE OR AXI_TB_ENABLE_FST_TRACE))

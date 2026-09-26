@@ -4,6 +4,8 @@ set(AXI_TB_COREMARK_SOURCE_DIR "${AXI_TB_ROOT_DIR}/third_party/coremark"
     CACHE PATH "EEMBC CoreMark checkout")
 set(AXI_TB_DHRYSTONE_ITERATIONS 2000 CACHE STRING "Dhrystone measured iterations")
 set(AXI_TB_COREMARK_ITERATIONS 10 CACHE STRING "CoreMark measured iterations")
+option(AXI_TB_FUXI_BENCHMARK_FIXED_LAYOUT
+       "Also build controlled-layout benchmark guests with rodata fixed at 0x5000" OFF)
 foreach(_setting AXI_TB_DHRYSTONE_ITERATIONS AXI_TB_COREMARK_ITERATIONS)
   if(NOT "${${_setting}}" MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR "${_setting} must be a positive integer")
@@ -35,9 +37,27 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
              "${AXI_TB_DHRYSTONE_SOURCE_DIR}/dhry_1.c")
 
 add_custom_target(fuxi_benchmarks)
-foreach(_isa rv32ima rv32imac)
+set(_variants rv32ima rv32imac)
+if(AXI_TB_FUXI_BENCHMARK_FIXED_LAYOUT)
+  list(APPEND _variants rv32ima-fixed-rodata rv32imac-fixed-rodata)
+  file(READ "${CMAKE_CURRENT_BINARY_DIR}/../software/link.ld" _fixed_script)
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/fixed-rodata.ld" "${_fixed_script}\n"
+    "ASSERT(ADDR(.text) + SIZEOF(.text) <= 0x5000, \"benchmark text exceeds fixed rodata base\");\n"
+    "ASSERT(ADDR(.rodata) == 0x5000, \"benchmark rodata placement changed\");\n")
+endif()
+foreach(_variant IN LISTS _variants)
+  string(REGEX REPLACE "-fixed-rodata$" "" _isa "${_variant}")
+  set(_linker_script "${CMAKE_CURRENT_BINARY_DIR}/../software/link.ld")
+  set(_layout_flags)
+  set(_layout natural)
+  if(_variant MATCHES "-fixed-rodata$")
+    set(_linker_script "${CMAKE_CURRENT_BINARY_DIR}/fixed-rodata.ld")
+    set(_layout_flags -Wl,--section-start=.rodata=0x5000)
+    set(_layout fixed-rodata)
+  endif()
   foreach(_benchmark dhrystone coremark)
-    set(_elf "${CMAKE_CURRENT_BINARY_DIR}/${_benchmark}-${_isa}.elf")
+    set(_elf "${CMAKE_CURRENT_BINARY_DIR}/${_benchmark}-${_variant}.elf")
+    set(_target "fuxi_benchmark_${_benchmark}_${_variant}")
     set(_flags -O3 -ffreestanding -fno-builtin -fno-common -fno-pic
                -falign-functions=4 -ffunction-sections -fdata-sections)
     set(_sources start.S runtime.c)
@@ -69,21 +89,22 @@ foreach(_isa rv32ima rv32imac)
         "-fuse-ld=${_lld}" ${_flags} ${_definitions}
         "-I${CMAKE_CURRENT_BINARY_DIR}" "-I${CMAKE_CURRENT_SOURCE_DIR}/include" "-I${CMAKE_CURRENT_SOURCE_DIR}"
         "-I${_include}" ${_sources}
-        "-Wl,--image-base=0,--no-relax,--gc-sections,--build-id=none,-T,${CMAKE_CURRENT_BINARY_DIR}/../software/link.ld"
+        "-Wl,--image-base=0,--no-relax,--gc-sections,--build-id=none,-T,${_linker_script}"
+        ${_layout_flags}
         -o "${_elf}"
       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
       DEPENDS ${_sources} ${_headers} include/benchmark.h include/stdio.h
-              "${CMAKE_CURRENT_BINARY_DIR}/../software/link.ld"
-      VERBATIM COMMENT "Building ${_benchmark} ${_isa}")
-    add_custom_target("fuxi_benchmark_${_benchmark}_${_isa}" DEPENDS "${_elf}")
-    add_dependencies(fuxi_benchmarks "fuxi_benchmark_${_benchmark}_${_isa}")
+              "${_linker_script}"
+      VERBATIM COMMENT "Building ${_benchmark} ${_variant}")
+    add_custom_target("${_target}" DEPENDS "${_elf}")
+    add_dependencies(fuxi_benchmarks "${_target}")
     if(BUILD_TESTING)
-      add_test(NAME "fuxi_benchmark_${_benchmark}_${_isa}"
+      add_test(NAME "${_target}"
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/run.py"
           --simulator "$<TARGET_FILE:fuxi_sim>" --elf "${_elf}"
-          --output "${CMAKE_CURRENT_BINARY_DIR}/results/${_benchmark}-${_isa}.json")
-      set_tests_properties("fuxi_benchmark_${_benchmark}_${_isa}"
-        PROPERTIES LABELS "fuxi;benchmark;${_isa}" TIMEOUT 300)
+          --output "${CMAKE_CURRENT_BINARY_DIR}/results/${_benchmark}-${_variant}.json")
+      set_tests_properties("${_target}"
+        PROPERTIES LABELS "fuxi;benchmark;${_isa};${_layout}" TIMEOUT 300)
     endif()
   endforeach()
 endforeach()

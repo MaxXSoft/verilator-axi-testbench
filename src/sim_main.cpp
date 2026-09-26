@@ -1,3 +1,4 @@
+#include <array>
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
@@ -67,6 +68,7 @@ struct Options {
   std::uint64_t reset_cycles = 5;
   std::uint64_t seed = 1;
   double stall_probability = 0.0;
+  bool stats = false;
   bool help = false;
 };
 
@@ -140,6 +142,8 @@ struct Options {
     } else if (name == "--stall-probability") {
       options.stall_probability =
           parse_probability(argument(index, name), name);
+    } else if (name == "--stats") {
+      options.stats = true;
     } else if (!name.empty() && name.front() == '+') {
       // Verilator/SystemVerilog plusargs are consumed by the model through
       // VerilatedContext::commandArgs().  They intentionally have no generic
@@ -176,6 +180,7 @@ void print_help(const char *program) {
       << "  --reset-cycles N       Reset rising edges (default 5)\n"
       << "  --seed N               Random-stall seed (default 1)\n"
       << "  --stall-probability P  AW/W/AR READY stall probability [0,1]\n"
+      << "  --stats                Print full-run per-port AXI read traffic\n"
       << "  --trace FILE           Write the build-selected VCD or FST trace\n"
       << "  +NAME[=VALUE]          Pass a plusarg through to the RTL model\n\n"
       << "UART:\n"
@@ -282,8 +287,26 @@ int run_simulation(int argc, char **argv, const Options &options,
 #endif
 
   std::signal(SIGINT, handle_interrupt);
+  if (options.stats) std::signal(SIGTERM, handle_interrupt);
   std::uint64_t active_cycles = 0;
   std::uint64_t total_cycles = 0;
+  struct ReadStats {
+    std::uint64_t requests = 0;
+    std::uint64_t bytes_requested = 0;
+    std::uint64_t beats_received = 0;
+  };
+  std::array<ReadStats, axi_tb::config::NUM_PORTS> read_stats{};
+  const auto print_stats = [&] {
+    if (!options.stats) return;
+    std::cerr << "SIM_STATS active_cycles=" << active_cycles << '\n';
+    for (std::size_t port = 0; port < read_stats.size(); ++port) {
+      const auto &stats = read_stats[port];
+      std::cerr << "AXI_STATS port=" << port
+                << " read_requests=" << stats.requests
+                << " read_bytes_requested=" << stats.bytes_requested
+                << " read_beats_received=" << stats.beats_received << '\n';
+    }
+  };
   try {
     while (active_cycles < options.max_cycles && interrupted == 0 &&
            !context.gotFinish()) {
@@ -292,9 +315,23 @@ int run_simulation(int argc, char **argv, const Options &options,
       sideband.drive(top);
       top.clk = 0;
       top.aresetn = reset ? 0 : 1;
-      Binding::drive(top, fabric.drive(reset));
+      const auto &responses = fabric.drive(reset);
+      Binding::drive(top, responses);
       evaluate(context, top, trace_pointer);
       const auto sampled = Binding::sample(top);
+      if (options.stats && !reset) {
+        for (std::size_t port = 0; port < read_stats.size(); ++port) {
+          const auto &master = sampled[port];
+          const auto &slave = responses[port];
+          auto &stats = read_stats[port];
+          if (master.ar_valid && slave.ar_ready) {
+            ++stats.requests;
+            stats.bytes_requested += (std::uint64_t{master.ar.length} + 1)
+                                     << master.ar.size;
+          }
+          if (master.r_ready && slave.r_valid) ++stats.beats_received;
+        }
+      }
       top.clk = 1;
       evaluate(context, top, trace_pointer);
       fabric.commit(sampled, reset);
@@ -308,6 +345,7 @@ int run_simulation(int argc, char **argv, const Options &options,
         std::cerr << "[axi-tb] guest exit code " << guest_code << " (0x"
                   << std::hex << guest_code << std::dec << ") after "
                   << active_cycles << " cycle(s)\n";
+        print_stats();
         top.final();
         if (trace_pointer != nullptr) {
           trace_pointer->close();
@@ -327,10 +365,11 @@ int run_simulation(int argc, char **argv, const Options &options,
     throw;
   }
 
+  print_stats();
   if (interrupted != 0) {
     std::cerr << "[axi-tb] interrupted after " << active_cycles
               << " active cycle(s)\n";
-    return 130;
+    return 128 + interrupted;
   }
   if (context.gotFinish()) {
     std::cerr << "[axi-tb] DUT called $finish before writing the exit device\n";

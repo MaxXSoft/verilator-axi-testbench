@@ -1,14 +1,16 @@
-#include "benchmark.h"
-#include "stdio.h"
 #include <stdarg.h>
 
-static uint64_t start_cycles, start_instructions, elapsed_cycles, elapsed_instructions;
+#include "benchmark.h"
+#include "stdio.h"
+
+static uint64_t start_cycles, start_instructions, elapsed_cycles,
+    elapsed_instructions;
 
 static uint64_t cycles(void) {
   uint32_t high, low, check;
   do {
     __asm__ volatile("rdcycleh %0; rdcycle %1; rdcycleh %2"
-                     : "=r"(high), "=r"(low), "=r"(check) :: "memory");
+                     : "=r"(high), "=r"(low), "=r"(check)::"memory");
   } while (high != check);
   return ((uint64_t)high << 32) | low;
 }
@@ -17,7 +19,7 @@ static uint64_t instructions(void) {
   uint32_t high, low, check;
   do {
     __asm__ volatile("rdinstreth %0; rdinstret %1; rdinstreth %2"
-                     : "=r"(high), "=r"(low), "=r"(check) :: "memory");
+                     : "=r"(high), "=r"(low), "=r"(check)::"memory");
   } while (high != check);
   return ((uint64_t)high << 32) | low;
 }
@@ -37,19 +39,23 @@ void benchmark_stop(void) {
 uint64_t benchmark_cycles(void) { return elapsed_cycles; }
 
 void benchmark_report(const char *name, unsigned iterations) {
-  printf("BENCH_RESULT name=%s iterations=%u cycles=%08x%08x instret=%08x%08x\n",
-         name, iterations, (unsigned)(elapsed_cycles >> 32), (unsigned)elapsed_cycles,
-         (unsigned)(elapsed_instructions >> 32), (unsigned)elapsed_instructions);
+  printf(
+      "BENCH_RESULT name=%s iterations=%u cycles=%08x%08x instret=%08x%08x\n",
+      name, iterations, (unsigned)(elapsed_cycles >> 32),
+      (unsigned)elapsed_cycles, (unsigned)(elapsed_instructions >> 32),
+      (unsigned)elapsed_instructions);
 }
 
 void benchmark_exit(unsigned code) {
   *(volatile uint32_t *)0x10001000 = code;
-  for (;;) {}
+  for (;;) {
+  }
 }
 
 static void putchar_uart(char value) { *(volatile char *)0x10000000 = value; }
 
-static int print_number(unsigned value, unsigned base, int width, char padding) {
+static int print_number(unsigned value, unsigned base, int width,
+                        char padding) {
   char digits[32];
   int count = 0, length;
   do {
@@ -74,20 +80,29 @@ static int print_format(const char *format, va_list arguments) {
       continue;
     }
     ++format;
-    if (*format == '0') { padding = '0'; ++format; }
-    while (*format >= '0' && *format <= '9') width = width * 10 + *format++ - '0';
+    if (*format == '0') {
+      padding = '0';
+      ++format;
+    }
+    while (*format >= '0' && *format <= '9')
+      width = width * 10 + *format++ - '0';
     if (*format == 'l') ++format; /* RV32 int and long both have 32 bits. */
     conversion = *format++;
     if (conversion == 's') {
       const char *text = va_arg(arguments, const char *);
-      while (*text) { putchar_uart(*text++); ++count; }
+      while (*text) {
+        putchar_uart(*text++);
+        ++count;
+      }
     } else if (conversion == 'c' || conversion == '%') {
       putchar_uart(conversion == '%' ? '%' : (char)va_arg(arguments, int));
       ++count;
     } else if (conversion == 'd' || conversion == 'u' || conversion == 'x') {
       unsigned value = va_arg(arguments, unsigned);
       if (conversion == 'd' && (int)value < 0) {
-        putchar_uart('-'); ++count; value = 0u - value;
+        putchar_uart('-');
+        ++count;
+        value = 0u - value;
       }
       count += print_number(value, conversion == 'x' ? 16 : 10, width, padding);
     } else {
@@ -132,12 +147,17 @@ void *memset(void *destination, int value, size_t size) {
 
 char *strcpy(char *destination, const char *source) {
   char *start = destination;
-  do { *destination = *source++; } while (*destination++);
+  do {
+    *destination = *source++;
+  } while (*destination++);
   return start;
 }
 
 int strcmp(const char *left, const char *right) {
-  while (*left && *left == *right) { ++left; ++right; }
+  while (*left && *left == *right) {
+    ++left;
+    ++right;
+  }
   return (unsigned char)*left - (unsigned char)*right;
 }
 
