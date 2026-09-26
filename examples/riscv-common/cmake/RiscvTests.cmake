@@ -220,7 +220,7 @@ function(_axi_tb_find_riscv_toolchain output_clang output_lld)
 endfunction()
 
 function(_axi_tb_add_riscv_elf)
-  set(_one_value TARGET OUTPUT LINKER_SCRIPT CLANG LLD)
+  set(_one_value TARGET OUTPUT LINKER_SCRIPT CLANG LLD MARCH)
   set(_multi_value SOURCES INCLUDE_DIRS DEFINITIONS DEPENDS)
   cmake_parse_arguments(PARSE_ARGV 0 ELF "BINARY" "${_one_value}" "${_multi_value}")
   foreach(_required TARGET OUTPUT LINKER_SCRIPT CLANG LLD SOURCES)
@@ -230,6 +230,9 @@ function(_axi_tb_add_riscv_elf)
   endforeach()
   if(TARGET "${ELF_TARGET}")
     message(FATAL_ERROR "software target '${ELF_TARGET}' already exists")
+  endif()
+  if(NOT ELF_MARCH)
+    set(ELF_MARCH rv32ima_zicsr_zifencei)
   endif()
 
   get_filename_component(_output_dir "${ELF_OUTPUT}" DIRECTORY)
@@ -253,7 +256,7 @@ function(_axi_tb_add_riscv_elf)
     COMMAND "${CMAKE_COMMAND}" -E env "TMPDIR=${_tmp_dir}"
       "${ELF_CLANG}"
       --target=riscv32-unknown-elf
-      -march=rv32ima_zicsr_zifencei
+      "-march=${ELF_MARCH}"
       -mabi=ilp32
       -nostdlib
       -static
@@ -295,7 +298,7 @@ example may add its own assembly guests with ``REGRESSION_DIR``. All guests
 use Clang's RV32 target and a validated ELF LLD.
 #]=======================================================================]
 function(axi_tb_add_riscv_software)
-  set(_options WITH_RISCV_TESTS)
+  set(_options WITH_RISCV_TESTS WITH_RVC_TESTS)
   set(_one_value
     TARGET OUTPUT_DIR RISCV_TESTS_DIR REGRESSION_DIR
     ROM_BASE ROM_SIZE RAM_BASE RAM_SIZE UART_BASE EXIT_BASE RESET_PC
@@ -304,7 +307,7 @@ function(axi_tb_add_riscv_software)
     OUT_SFENCE_UNCACHED OUT_SFENCE_WRITEBACK_FAULT
     OUT_ACCESS_LOAD OUT_ACCESS_STORE OUT_ACCESS_FETCH
     OUT_ACCESS_DCACHE_WRITEBACK
-    OUT_RISCV_NAMES OUT_RISCV_ELFS OUT_MA_DATA
+    OUT_RISCV_NAMES OUT_RISCV_ELFS OUT_MA_DATA OUT_RVC
   )
   cmake_parse_arguments(PARSE_ARGV 0 SW "${_options}" "${_one_value}"
     "REGRESSION_SOURCES;INCLUDE_DIRS;DEPENDS")
@@ -504,6 +507,23 @@ function(axi_tb_add_riscv_software)
     if(NOT _built_count EQUAL 59)
       message(FATAL_ERROR
         "Default riscv-tests build has ${_built_count} guests; exactly 59 required")
+    endif()
+
+    if(SW_WITH_RVC_TESTS)
+      set(_rvc_elf "${_output_dir}/riscv-tests/rv32uc/rvc.elf")
+      _axi_tb_add_riscv_elf(
+        TARGET "${SW_TARGET}_rv32uc_rvc" OUTPUT "${_rvc_elf}"
+        LINKER_SCRIPT "${_linker_script}" CLANG "${_clang}" LLD "${_lld}"
+        MARCH rv32imac_zicsr_zifencei
+        SOURCES "${_runtime}" "${_riscv_tests_dir}/isa/rv32uc/rvc.S"
+        INCLUDE_DIRS "${_software_include}" "${_riscv_tests_dir}/isa/macros/scalar"
+        DEPENDS "${_riscv_tests_dir}/isa/rv64uc/rvc.S"
+        DEFINITIONS ${_definitions})
+      add_dependencies("${_riscv_meta}" "${SW_TARGET}_rv32uc_rvc")
+      add_dependencies("${SW_TARGET}" "${SW_TARGET}_rv32uc_rvc")
+      if(SW_OUT_RVC)
+        set(${SW_OUT_RVC} "${_rvc_elf}" PARENT_SCOPE)
+      endif()
     endif()
 
     # ma_data intentionally does not participate in the default 59-test

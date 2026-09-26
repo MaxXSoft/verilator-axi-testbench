@@ -35,7 +35,12 @@ The `fuxi_software` target builds four general smoke guests, four interrupt
 guests, an Sv32 fetch-redirect guest, a raw-ROM/RAM-ELF boot pair, two SFENCE
 maintenance guests, four AXI-response fault guests, and
 exactly 59 default upstream ISA guests (41 I including `fence_i`, 8 M, and
-10 A).  The xRET guest uses a
+10 A). With C-capable RTL, `AXI_TB_FUXI_WITH_RVC_TESTS=ON` adds the unmodified
+upstream `rv32uc/rvc.S` guest (CTest label `rv32c`). It exercises compressed
+arithmetic, loads/stores, branches and jumps, including a 32-bit instruction
+starting at the last halfword of a 4 KiB boundary. It runs in M-mode without
+translation; virtual-page permission/fault cases need separate core regressions.
+The xRET guest uses a
 software-pending supervisor interrupt and therefore does not need an external
 adapter IRQ.  The fault guests check instruction/load RRESP,
 uncached-store BRESP, and dirty D-cache eviction BRESP propagation to the

@@ -3,6 +3,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/../riscv-common/cmake/RiscvTests.cmake")
 
 option(AXI_TB_FUXI_WITH_RISCV_TESTS
        "Build the locked 59-test upstream RV32 I/M/A manifest" ON)
+option(AXI_TB_FUXI_WITH_RVC_TESTS
+       "Add the upstream RV32 compressed-instruction test (requires C-capable RTL)" OFF)
 option(AXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY
        "Enable the non-gating upstream ma_data capability test" OFF)
 option(AXI_TB_FUXI_WITH_BENCHMARKS
@@ -63,6 +65,12 @@ set(_riscv_tests_arguments)
 if(AXI_TB_FUXI_WITH_RISCV_TESTS)
   list(APPEND _riscv_tests_arguments WITH_RISCV_TESTS)
 endif()
+if(AXI_TB_FUXI_WITH_RVC_TESTS)
+  if(NOT AXI_TB_FUXI_WITH_RISCV_TESTS)
+    message(FATAL_ERROR "AXI_TB_FUXI_WITH_RVC_TESTS requires AXI_TB_FUXI_WITH_RISCV_TESTS")
+  endif()
+  list(APPEND _riscv_tests_arguments WITH_RVC_TESTS)
+endif()
 axi_tb_add_riscv_software(
   TARGET fuxi_software
   OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/software"
@@ -96,6 +104,7 @@ axi_tb_add_riscv_software(
   OUT_RISCV_NAMES _fuxi_riscv_names
   OUT_RISCV_ELFS _fuxi_riscv_elfs
   OUT_MA_DATA _fuxi_ma_data_elf
+  OUT_RVC _fuxi_rvc_elf
 )
 add_dependencies(fuxi_sim fuxi_software)
 if(AXI_TB_FUXI_WITH_BENCHMARKS)
@@ -244,6 +253,11 @@ if(BUILD_TESTING)
   )
 
   if(AXI_TB_FUXI_WITH_RISCV_TESTS)
+    if(AXI_TB_FUXI_WITH_RVC_TESTS)
+      _fuxi_add_expected_test(fuxi_riscv_rv32uc-rvc "${_fuxi_rvc_elf}" 0 10000000)
+      set_tests_properties(fuxi_riscv_rv32uc-rvc PROPERTIES
+        LABELS "fuxi;riscv-tests;rv32c" TIMEOUT 300)
+    endif()
     list(LENGTH _fuxi_riscv_names _name_count)
     list(LENGTH _fuxi_riscv_elfs _elf_count)
     if(NOT _name_count EQUAL 59 OR NOT _elf_count EQUAL 59)
