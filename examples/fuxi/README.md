@@ -12,6 +12,8 @@ elaboration support is under `cmake/`, and
 the interrupt, SFENCE, and AXI-response regression guests are under
 `software/`. Generic RISC-V runtime, linker, smoke-guest, and upstream
 `riscv-tests` support is shared from the sibling `../riscv-common/` example.
+Optional pinned Dhrystone/CoreMark guests, workload counters, validation, and
+reproducible IPC comparisons are described in [benchmarks/README.md](benchmarks/README.md).
 
 The integration expects:
 

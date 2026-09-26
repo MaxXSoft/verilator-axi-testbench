@@ -4,3 +4,9 @@
 [submodule "third_party/riscv-tests"]
 	path = third_party/riscv-tests
 	url = https://github.com/riscv-software-src/riscv-tests.git
+[submodule "third_party/benchmark-dhrystone"]
+	path = third_party/benchmark-dhrystone
+	url = https://github.com/sifive/benchmark-dhrystone.git
+[submodule "third_party/coremark"]
+	path = third_party/coremark
+	url = https://github.com/eembc/coremark.git

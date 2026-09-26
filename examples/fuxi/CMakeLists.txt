@@ -5,6 +5,8 @@ option(AXI_TB_FUXI_WITH_RISCV_TESTS
        "Build the locked 59-test upstream RV32 I/M/A manifest" ON)
 option(AXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY
        "Enable the non-gating upstream ma_data capability test" OFF)
+option(AXI_TB_FUXI_WITH_BENCHMARKS
+       "Build pinned Dhrystone and CoreMark RV32IMA/RV32IMAC guests" OFF)
 
 # One source of truth for both the generated host configuration and all guest
 # linker scripts/headers.
@@ -96,6 +98,9 @@ axi_tb_add_riscv_software(
   OUT_MA_DATA _fuxi_ma_data_elf
 )
 add_dependencies(fuxi_sim fuxi_software)
+if(AXI_TB_FUXI_WITH_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()
 
 # A real raw ROM boot stub jumping into a separately loaded RAM-only ELF.
 _axi_tb_find_riscv_toolchain(_mixed_clang _mixed_lld)

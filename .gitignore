@@ -29,3 +29,6 @@
 
 # Debugging
 /debug/
+
+# Python benchmark tooling
+__pycache__/
