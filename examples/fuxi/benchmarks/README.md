@@ -7,7 +7,7 @@ are unchanged. Initialize them with `git submodule update --init` and configure:
 ```sh
 cmake --preset fuxi -DAXI_TB_FUXI_WITH_BENCHMARKS=ON \
   -DAXI_TB_FUXI_SOURCE_DIR=/path/to/Fuxi
-cmake --build build/fuxi --target fuxi_sim fuxi_benchmarks -j4
+cmake --build build/fuxi --target fuxi_sim fuxi_benchmarks -j
 python3 examples/fuxi/benchmarks/run.py \
   --simulator build/fuxi/examples/fuxi/fuxi_sim \
   --elf build/fuxi/examples/fuxi/benchmarks/dhrystone-rv32ima.elf \
@@ -15,7 +15,7 @@ python3 examples/fuxi/benchmarks/run.py \
 ```
 
 Replace the ELF name with `coremark-rv32ima.elf`, `dhrystone-rv32imac.elf`, or
-`coremark-rv32imac.elf`. The IMAC images require C-capable RTL. CTest label
+`coremark-rv32imac.elf`. The IMAC images require RVC-capable RTL. CTest label
 `benchmark` runs all four images when the option is enabled; label `rv32ima`
 selects only the uncompressed pair. These guests are opt-in so existing cores
 and CI configurations do not acquire a compressed-instruction requirement.
@@ -59,10 +59,7 @@ separately and does not enter these scores.
 
 The JSON records simulator and ELF SHA-256 digests, exact invocation, AXI stall
 probability/seed, counters, and validation status. The adjacent `.log` preserves
-all guest and simulator output. For frontend comparisons, freeze the old RTL
-source and build directory, replay the **same IMA ELF** on both simulators,
-then run the matching IMAC ELF on the new simulator. This separates pipeline
-effects from compiler instruction encoding and layout changes.
+all guest and simulator output.
 
 The runner enables simulator `--stats` to collect accepted AR requests,
 requested burst bytes and completed R beats per AXI port. In this Fuxi adapter,
