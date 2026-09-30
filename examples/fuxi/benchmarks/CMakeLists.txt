@@ -18,7 +18,7 @@ foreach(_source "${AXI_TB_DHRYSTONE_SOURCE_DIR}/dhry_1.c"
   endif()
 endforeach()
 
-_axi_tb_find_riscv_toolchain(_clang _lld)
+_axi_tb_find_riscv_toolchain(_clang _lld WITH_RVC)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 # Replace only the legacy floating-point score printer. Keep its workload,

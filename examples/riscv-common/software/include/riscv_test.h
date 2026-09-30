@@ -6,7 +6,7 @@
 
 #define TESTNUM gp
 
-/* The selected RV32 I/M/A tests require no privilege-mode transition. */
+/* The selected RV32 I/M/A/C tests require no privilege-mode transition. */
 #define RVTEST_RV32U
 #define RVTEST_RV32M
 

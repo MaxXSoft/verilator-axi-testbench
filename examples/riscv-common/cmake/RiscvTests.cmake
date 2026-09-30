@@ -140,6 +140,17 @@ function(_axi_tb_find_riscv_lld output_var)
 endfunction()
 
 function(_axi_tb_find_riscv_toolchain output_clang output_lld)
+  cmake_parse_arguments(PARSE_ARGV 2 TOOLCHAIN "WITH_RVC" "" "")
+  if(TOOLCHAIN_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR
+      "_axi_tb_find_riscv_toolchain(): unknown arguments: ${TOOLCHAIN_UNPARSED_ARGUMENTS}")
+  endif()
+  set(_march rv32ima_zicsr_zifencei)
+  set(_probe_definitions)
+  if(TOOLCHAIN_WITH_RVC)
+    set(_march rv32imac_zicsr_zifencei)
+    list(APPEND _probe_definitions -DAXI_TB_PROBE_RVC=1)
+  endif()
   _axi_tb_find_riscv_lld(_lld)
 
   set(_clang_candidates)
@@ -163,13 +174,15 @@ function(_axi_tb_find_riscv_toolchain output_clang output_lld)
   endif()
   list(REMOVE_DUPLICATES _clang_candidates)
 
-  set(_probe_dir "${CMAKE_BINARY_DIR}/axi-tb-riscv-toolchain-probe")
+  set(_probe_dir "${CMAKE_BINARY_DIR}/axi-tb-riscv-toolchain-probe/${_march}")
   set(_probe_tmp "${_probe_dir}/tmp")
   set(_probe_elf "${_probe_dir}/probe.elf")
   file(MAKE_DIRECTORY "${_probe_dir}" "${_probe_tmp}")
   set(_probe_source
     "${AXI_TB_RISCV_COMMON_DIR}/software/runtime/toolchain_probe.S")
   set(_diagnostics)
+  # An earlier IMA probe in the caller must not satisfy a later IMAC probe.
+  set(_clang "")
   foreach(_candidate IN LISTS _clang_candidates)
     if(NOT EXISTS "${_candidate}" OR IS_DIRECTORY "${_candidate}")
       continue()
@@ -179,7 +192,8 @@ function(_axi_tb_find_riscv_toolchain output_clang output_lld)
       COMMAND "${CMAKE_COMMAND}" -E env "TMPDIR=${_probe_tmp}"
         "${_candidate}"
         --target=riscv32-unknown-elf
-        -march=rv32ima_zicsr_zifencei
+        "-march=${_march}"
+        ${_probe_definitions}
         -mabi=ilp32
         -nostdlib
         -static
@@ -203,9 +217,9 @@ function(_axi_tb_find_riscv_toolchain output_clang output_lld)
   if(NOT _clang)
     if(_explicit)
       set(_hint
-        "AXI_TB_RISCV_CLANG='${AXI_TB_RISCV_CLANG}' failed the probe.")
+        "AXI_TB_RISCV_CLANG='${AXI_TB_RISCV_CLANG}' failed the ${_march} probe.")
     else()
-      set(_hint "No discovered Clang could link the RV32IMA probe with LLD.")
+      set(_hint "No discovered Clang could link the ${_march} probe with LLD.")
     endif()
     message(FATAL_ERROR
       "${_hint}\n"
@@ -293,9 +307,12 @@ axi_tb_add_riscv_software
 -------------------------
 
 Build the reusable smoke guests and, with ``WITH_RISCV_TESTS``, the locked
-59-test RV32 I/M/A suite plus a separate ``ma_data`` capability guest. A DUT
-example may add its own assembly guests with ``REGRESSION_DIR``. All guests
-use Clang's RV32 target and a validated ELF LLD.
+59-test RV32 I/M/A suite plus a separate ``ma_data`` capability guest.
+``WITH_RVC_TESTS`` requires ``WITH_RISCV_TESTS`` and adds the upstream RV32C
+guest, returned separately through ``OUT_RVC``. It also enables an IMAC
+toolchain probe. Other guests retain the IMA compilation target. A DUT example
+may add its own assembly guests with ``REGRESSION_DIR``. All guests use Clang's
+RV32 target and a validated ELF LLD.
 #]=======================================================================]
 function(axi_tb_add_riscv_software)
   set(_options WITH_RISCV_TESTS WITH_RVC_TESTS)
@@ -314,6 +331,10 @@ function(axi_tb_add_riscv_software)
   if(SW_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR
       "axi_tb_add_riscv_software(): unknown arguments: ${SW_UNPARSED_ARGUMENTS}")
+  endif()
+  if(SW_WITH_RVC_TESTS AND NOT SW_WITH_RISCV_TESTS)
+    message(FATAL_ERROR
+      "axi_tb_add_riscv_software(): WITH_RVC_TESTS requires WITH_RISCV_TESTS")
   endif()
   foreach(_required
       TARGET OUTPUT_DIR ROM_BASE ROM_SIZE RAM_BASE RAM_SIZE UART_BASE EXIT_BASE
@@ -368,7 +389,11 @@ function(axi_tb_add_riscv_software)
     @ONLY NEWLINE_STYLE UNIX
   )
 
-  _axi_tb_find_riscv_toolchain(_clang _lld)
+  set(_toolchain_options)
+  if(SW_WITH_RVC_TESTS)
+    list(APPEND _toolchain_options WITH_RVC)
+  endif()
+  _axi_tb_find_riscv_toolchain(_clang _lld ${_toolchain_options})
   set(_runtime "${AXI_TB_RISCV_COMMON_DIR}/software/runtime/start.S")
   set(_software_include "${AXI_TB_RISCV_COMMON_DIR}/software/include")
   set(_definitions
@@ -506,7 +531,7 @@ function(axi_tb_add_riscv_software)
     list(LENGTH _riscv_elfs _built_count)
     if(NOT _built_count EQUAL 59)
       message(FATAL_ERROR
-        "Default riscv-tests build has ${_built_count} guests; exactly 59 required")
+        "I/M/A riscv-tests build has ${_built_count} guests; exactly 59 required")
     endif()
 
     if(SW_WITH_RVC_TESTS)
@@ -526,7 +551,7 @@ function(axi_tb_add_riscv_software)
       endif()
     endif()
 
-    # ma_data intentionally does not participate in the default 59-test
+    # ma_data intentionally does not participate in the default ISA
     # conformance gate: it measures hardware misaligned-access capability.
     set(_ma_source "${_riscv_tests_dir}/isa/rv32ui/ma_data.S")
     if(NOT EXISTS "${_ma_source}")

@@ -49,7 +49,7 @@
     },
     {
       "name": "fuxi",
-      "displayName": "Fuxi plus RV32 I/M/A",
+      "displayName": "Fuxi plus RV32 I/M/A/C",
       "inherits": "release",
       "binaryDir": "${sourceDir}/build/fuxi",
       "cacheVariables": {
