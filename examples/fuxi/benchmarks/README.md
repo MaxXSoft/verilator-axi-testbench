@@ -5,8 +5,7 @@ and [EEMBC CoreMark](https://github.com/eembc/coremark). Their measured workload
 are unchanged. Initialize them with `git submodule update --init` and configure:
 
 ```sh
-cmake --preset fuxi -DAXI_TB_FUXI_WITH_BENCHMARKS=ON \
-  -DAXI_TB_FUXI_SOURCE_DIR=/path/to/Fuxi
+cmake --preset fuxi -DAXI_TB_FUXI_WITH_BENCHMARKS=ON
 cmake --build build/fuxi --target fuxi_sim fuxi_benchmarks -j
 python3 examples/fuxi/benchmarks/run.py \
   --simulator build/fuxi/examples/fuxi/fuxi_sim \
@@ -15,10 +14,27 @@ python3 examples/fuxi/benchmarks/run.py \
 ```
 
 Replace the ELF name with `coremark-rv32ima.elf`, `dhrystone-rv32imac.elf`, or
-`coremark-rv32imac.elf`. The IMAC images require RVC-capable RTL. CTest label
-`benchmark` runs all four images when the option is enabled; label `rv32ima`
-selects only the uncompressed pair. These guests are opt-in so existing cores
-and CI configurations do not acquire a compressed-instruction requirement.
+`coremark-rv32imac.elf`. The preset's pinned Fuxi supports both ISA variants;
+an external checkout selected with `AXI_TB_FUXI_SOURCE_DIR` must also support
+C to run the IMAC images. Benchmark tool discovery validates an IMAC link
+including a compressed instruction, even when the upstream ISA suite is off.
+The benchmark suite is opt-in to keep its extra dependencies and runtime out
+of the default Fuxi build. CI enables it explicitly. Both ISA variants remain
+available for controlled comparisons.
+
+CTest label filters are regular expressions, so use anchors to select one
+ISA variant:
+
+```sh
+ctest --preset fuxi -L '^benchmark$'
+ctest --preset fuxi -L '^rv32ima$'
+ctest --preset fuxi -L '^rv32imac$'
+```
+
+Without the optional fixed-layout variants below, these select all four
+images, the two IMA images, and the two IMAC images, respectively. The `rv32c`
+label selects the upstream compressed-instruction regression, which is
+included in the default Fuxi ISA suite independently of benchmarks.
 
 Both ISA variants use the same Clang and `-O3 -ffreestanding -fno-builtin
 -fno-common -fno-pic -falign-functions=4 -ffunction-sections -fdata-sections`,

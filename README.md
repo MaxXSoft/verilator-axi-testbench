@@ -318,7 +318,9 @@ them after cloning:
 git submodule update --init
 ```
 
-The preset enables both the Fuxi integration and the RV32I/M/A software suite:
+The pinned Fuxi implements RV32IMAC with Zicsr and Zifencei, including mixed
+16/32-bit instruction streams. The preset enables the Fuxi integration and
+the 60-test upstream RV32 I/M/A/C suite:
 
 ```sh
 cmake --preset fuxi
@@ -328,7 +330,9 @@ ctest --preset fuxi
 
 This configuration uses Fuxi's Chisel 7.13.0 and Scala 2.13.18 build. It
 requires JDK 17 or newer, sbt, a Clang that supports
-`rv32ima_zicsr_zifencei/ilp32`, and `ld.lld`. The following
+`rv32imac_zicsr_zifencei` with the ILP32 ABI, and `ld.lld`. Tool discovery
+validates a real link including a compressed instruction. An external Fuxi
+checkout must also support C to run the default ISA suite. The following
 cache variables can override automatic tool discovery or the default submodule
 paths:
 
@@ -357,13 +361,21 @@ files.
 
 The optional tests include UART/Exit smoke tests, an xRET/pending-IRQ
 regression, CLINT/PLIC M/S interrupt delivery, raw-ROM plus ELF boot, four
-AXI-response access-fault regressions, and 59 RV32I/M/A guests
-compiled directly from the upstream assembly. The xRET regression uses a
-software-set supervisor pending interrupt and does not depend on an external
-adapter IRQ. The MMIO interrupt regression uses an otherwise disabled Fuxi
-adapter plusarg hook to raise a soft IRQ once after the UART W handshake but
+AXI-response access-fault regressions, and 60 upstream ISA guests: 41 I
+(including `fence_i`), 8 M, 10 A, and the `rv32uc/rvc.S` compressed-instruction
+guest. The xRET regression uses a software-set supervisor pending interrupt
+and does not depend on an external adapter IRQ. The MMIO interrupt regression
+uses an otherwise disabled Fuxi adapter plusarg hook to raise a soft IRQ once
+after the UART W handshake but
 before the BRESP completes, then verifies that the character is written
 exactly once.
+
+RVC is included whenever `AXI_TB_FUXI_WITH_RISCV_TESTS=ON`, which is the
+default for Fuxi. Setting it to `OFF` disables the entire upstream ISA suite.
+The I/M/A and existing smoke/protocol guests retain their IMA compilation
+target to preserve instruction coverage and assembly layouts; the RVC guest
+uses IMAC. Optional [Dhrystone/CoreMark benchmarks](examples/fuxi/benchmarks/README.md)
+provide both IMA and IMAC variants for controlled comparisons.
 
 The SFENCE regressions use an `rs1` value in the uncached window. They
 check both successful completion with a clean D-cache and, when a dirty ROM
@@ -371,13 +383,13 @@ line fails to write back, that cause 7 is not hidden by demand-address routing.
 The response regressions cover RRESP for instruction fetches and cacheable
 loads, BRESP for uncached stores and dirty D-cache evictions, and verify the
 exception cause reported by Fuxi. `ma_data` is a separate,
-misaligned-access capability test and is not part of the default 59-test gate.
+misaligned-access capability test and is not part of the default 60-test gate.
 It records whether the DUT chooses to trap or complete an unaligned access in
 hardware. Whether these integration tests pass depends on the pinned submodule
 revisions, the local toolchain, and the DUT; this README does not claim they
 have been validated in every environment.
 
-The Fuxi smoke, AXI-response, and 59 ISA regressions use deterministic 35% AXI
+The Fuxi smoke, AXI-response, and 60 ISA regressions use deterministic 35% AXI
 ingress backpressure. A separate `fence_i` regression uses an 80% stall
 rate during D-cache writeback to check that WVALID and its payload remain
 stable while WREADY is low.
@@ -386,10 +398,15 @@ After configuration succeeds, tests can be selected by CTest label:
 
 ```sh
 ctest --preset fuxi -L fuxi
-ctest --preset fuxi -L rv32i
-ctest --preset fuxi -L rv32m
-ctest --preset fuxi -L rv32a
+ctest --preset fuxi -L '^riscv-tests$'
+ctest --preset fuxi -L '^rv32i$'
+ctest --preset fuxi -L '^rv32m$'
+ctest --preset fuxi -L '^rv32a$'
+ctest --preset fuxi -L rv32c
 ```
+
+CTest label filters are regular expressions. The anchors keep `rv32i` from
+also selecting the `rv32ima` and `rv32imac` benchmark labels when enabled.
 
 To include Fuxi's `ma_data` capability case, which Fuxi expects to
 handle with a trap, reconfigure with

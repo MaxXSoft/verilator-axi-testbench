@@ -7,6 +7,11 @@ only `build.sbt`, the two `project` files, `src/main/scala/**`, and
 `verilog/FuxiWrapper.v`.  The staged Fuxi sources are elaborated without
 modification.
 
+The pinned Fuxi implements RV32IMAC with Zicsr and Zifencei. Its frontend
+accepts mixed 16/32-bit instructions, including instructions starting at
+halfword boundaries. An external checkout used for the default ISA suite
+must also support C.
+
 Fuxi-specific RTL is under `rtl/`, C++ peripherals are under `sim/`,
 elaboration support is under `cmake/`, and
 the interrupt, SFENCE, and AXI-response regression guests are under
@@ -22,9 +27,12 @@ The integration expects:
   is discovered from `PATH`.
 - `AXI_TB_FUXI_SBT_EXECUTABLE`: optional explicit `sbt` path.
 - `AXI_TB_RISCV_TESTS_SOURCE_DIR`: riscv-tests checkout when
-  `AXI_TB_FUXI_WITH_RISCV_TESTS=ON`; the `fuxi` preset enables it.
+  `AXI_TB_FUXI_WITH_RISCV_TESTS=ON` (the default). This builds all 60 upstream
+  I/M/A/C guests; setting it to `OFF` skips the entire upstream suite.
 - `AXI_TB_RISCV_CLANG` and `AXI_TB_RISCV_LLD`: optional explicit tool paths.
-  Discovery validates a real RV32 link; the macOS linker is never used.
+  The default suite requires `rv32imac_zicsr_zifencei` with the ILP32 ABI.
+  Discovery validates a real link containing a compressed instruction; the
+  macOS linker is never used.
 
 `fuxi_sim` uses three 32-bit AXI lanes in instruction, data, uncached order.
 The uncached region is `0x10000000..0x1fffffff`; UART and guest exit are at
@@ -34,16 +42,25 @@ while data and BSS are loaded into executable RAM beginning at `0x80000000`.
 The `fuxi_software` target builds four general smoke guests, four interrupt
 guests, an Sv32 fetch-redirect guest, a raw-ROM/RAM-ELF boot pair, two SFENCE
 maintenance guests, four AXI-response fault guests, and
-exactly 59 default upstream ISA guests (41 I including `fence_i`, 8 M, and
-10 A). With RVC-capable RTL, `AXI_TB_FUXI_WITH_RVC_TESTS=ON` adds the unmodified
-upstream `rv32uc/rvc.S` guest (CTest label `rv32c`). It exercises compressed
-arithmetic, loads/stores, branches and jumps, including a 32-bit instruction
-starting at the last halfword of a 4 KiB boundary. It runs in M-mode without
-translation; virtual-page permission/fault cases need separate core regressions.
-The xRET guest uses a
-software-pending supervisor interrupt and therefore does not need an external
-adapter IRQ.  The fault guests check instruction/load RRESP,
-uncached-store BRESP, and dirty D-cache eviction BRESP propagation to the
+exactly 60 default upstream ISA guests (41 I including `fence_i`, 8 M,
+10 A, and 1 C). The C guest is the unmodified upstream `rv32uc/rvc.S`
+(CTest label `rv32c`). It exercises compressed arithmetic, loads/stores,
+branches and jumps, including a 32-bit instruction starting at the last
+halfword of a 4 KiB boundary. It runs in M-mode without translation;
+virtual-page permission/fault cases need separate core regressions.
+The RVC guest uses `rv32imac_zicsr_zifencei`. The I/M/A, smoke, and protocol
+guests retain `rv32ima_zicsr_zifencei` to preserve their instruction coverage
+and layout-sensitive cases, such as the Sv32 page-end redirect.
+
+After configuring and building the `fuxi` preset, select the C guest with:
+
+```sh
+ctest --preset fuxi -L rv32c
+```
+
+The xRET guest uses a software-pending supervisor interrupt and therefore
+does not need an external adapter IRQ. The fault guests check instruction/load
+RRESP, uncached-store BRESP, and dirty D-cache eviction BRESP propagation to the
 architectural access-fault causes.  The additional
 `fuxi_software_capability_misaligned_ma_data` target is non-gating and separate;
 its CTest is disabled unless `AXI_TB_FUXI_RUN_MISALIGNED_CAPABILITY=ON`.
@@ -141,11 +158,13 @@ preset, then run from the GeeOS directory:
   --load 0x200=build/boot.bin --elf build/geeos.elf --max-cycles 2000000000
 ```
 
-GeeOS's simulation ROM stub is eight bytes linked at reset PC `0x200`; load it
-at that address. The ELF supplies the RAM kernel and embedded user filesystem.
-GeeOS sets up its own M-mode timer handler before entering S-mode, so this
-boot path does not use SBI firmware. GeeOS's `fuxi_sim` target uses the first
-4 MiB of the platform's 128 MiB RAM, with 128 KiB reserved for the kernel heap.
+GeeOS's simulation ROM stub is linked at reset PC `0x200`; load it at that
+address. Its size depends on the selected ISA. GeeOS defaults to RV32IMAC,
+which the pinned Fuxi supports. The ELF supplies the RAM kernel and embedded
+user filesystem. GeeOS sets up its own M-mode timer handler before entering
+S-mode, so this boot path does not use SBI firmware. GeeOS's `fuxi_sim` target
+uses the first 4 MiB of the platform's 128 MiB RAM, with 128 KiB reserved for
+the kernel heap.
 Its aligned, word-at-a-time `memset` retains free-page debug fills while
 reducing initialization time. The command above also budgets for scheduling
 and interactive programs after initialization.

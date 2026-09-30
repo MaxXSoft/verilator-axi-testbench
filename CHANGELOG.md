@@ -8,7 +8,7 @@ All notable changes to the verilator-axi-testbench will be documented in this fi
 
 - Pinned Dhrystone and CoreMark RV32IMA/RV32IMAC Fuxi benchmark guests.
 - Validated benchmark reports with workload counters and reproducibility metadata.
-- Opt-in upstream RV32C simulator regression.
+- Upstream RV32C simulator regression.
 - Full-run per-port AXI read traffic statistics via `--stats`.
 - Fixed-layout benchmark variants for controlled ISA comparisons.
 
@@ -16,6 +16,8 @@ All notable changes to the verilator-axi-testbench will be documented in this fi
 
 - Update Fuxi for RV32IMAC support and refresh riscv-tests.
 - Run Fuxi RV32C and benchmark suites in CI.
+- Include RV32C in the default 60-test Fuxi ISA suite and remove its separate option.
+- Validate compressed-instruction toolchain support for RVC tests and IMAC benchmarks.
 - Refresh Fuxi benchmark and RV32C documentation.
 
 ## 0.0.2 - 2026-09-25
