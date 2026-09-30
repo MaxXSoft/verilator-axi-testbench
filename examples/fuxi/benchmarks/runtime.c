@@ -84,8 +84,9 @@ static int print_format(const char *format, va_list arguments) {
       padding = '0';
       ++format;
     }
-    while (*format >= '0' && *format <= '9')
+    while (*format >= '0' && *format <= '9') {
       width = width * 10 + *format++ - '0';
+    }
     if (*format == 'l') ++format; /* RV32 int and long both have 32 bits. */
     conversion = *format++;
     if (conversion == 's') {

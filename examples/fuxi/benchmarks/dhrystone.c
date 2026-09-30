@@ -5,10 +5,11 @@
 long time(long *unused) {
   static unsigned calls;
   (void)unused;
-  if (calls++ == 0)
+  if (calls++ == 0) {
     benchmark_start();
-  else
+  } else {
     benchmark_stop();
+  }
   return 0;
 }
 
@@ -30,8 +31,9 @@ int main(void) {
       strcmp(Ptr_Glob->variant.var_1.Str_Comp,
              "DHRYSTONE PROGRAM, SOME STRING") ||
       strcmp(Next_Ptr_Glob->variant.var_1.Str_Comp,
-             "DHRYSTONE PROGRAM, SOME STRING"))
+             "DHRYSTONE PROGRAM, SOME STRING")) {
     return 1;
+  }
   benchmark_report("dhrystone", DHRY_ITERS);
   return 0;
 }
