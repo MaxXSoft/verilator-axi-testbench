@@ -126,7 +126,9 @@ jobs:
           cmake --preset fuxi \
             -DCMAKE_CXX_COMPILER="clang++-${LLVM_VERSION}" \
             -DAXI_TB_RISCV_CLANG="/usr/bin/clang-${LLVM_VERSION}" \
-            -DAXI_TB_RISCV_LLD="/usr/bin/ld.lld-${LLVM_VERSION}"
+            -DAXI_TB_RISCV_LLD="/usr/bin/ld.lld-${LLVM_VERSION}" \
+            -DAXI_TB_FUXI_WITH_RVC_TESTS=ON \
+            -DAXI_TB_FUXI_WITH_BENCHMARKS=ON
 
       - name: Build Fuxi and RV tests
         run: cmake --build --preset fuxi

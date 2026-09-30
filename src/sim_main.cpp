@@ -241,6 +241,58 @@ void load_images(const Options &options, axi_tb::Platform &platform) {
   plan.apply();
 }
 
+template <std::size_t NumPorts>
+class ReadStatistics {
+ public:
+  explicit ReadStatistics(bool enabled) : enabled_(enabled) {}
+
+  template <std::size_t DataBytes>
+  void sample(
+      const std::array<axi_tb::MasterSignals<DataBytes>, NumPorts> &masters,
+      const std::array<axi_tb::SlaveSignals<DataBytes>, NumPorts> &slaves,
+      bool reset) {
+    if (!enabled_ || reset) {
+      return;
+    }
+    for (std::size_t port = 0; port < NumPorts; ++port) {
+      const auto &master = masters[port];
+      const auto &slave = slaves[port];
+      auto &stats = ports_[port];
+      if (master.ar_valid && slave.ar_ready) {
+        ++stats.requests;
+        stats.bytes_requested += (std::uint64_t{master.ar.length} + 1)
+                                 << master.ar.size;
+      }
+      if (master.r_ready && slave.r_valid) {
+        ++stats.beats_received;
+      }
+    }
+  }
+
+  void print(std::uint64_t active_cycles) const {
+    if (!enabled_) {
+      return;
+    }
+    std::cerr << "SIM_STATS active_cycles=" << active_cycles << '\n';
+    for (std::size_t port = 0; port < NumPorts; ++port) {
+      const auto &stats = ports_[port];
+      std::cerr << "AXI_STATS port=" << port
+                << " read_requests=" << stats.requests
+                << " read_bytes_requested=" << stats.bytes_requested
+                << " read_beats_received=" << stats.beats_received << '\n';
+    }
+  }
+
+ private:
+  struct Port {
+    std::uint64_t requests = 0;
+    std::uint64_t bytes_requested = 0;
+    std::uint64_t beats_received = 0;
+  };
+  bool enabled_;
+  std::array<Port, NumPorts> ports_{};
+};
+
 int run_simulation(int argc, char **argv, const Options &options,
                    const axi_tb::DeviceRegistry &registry,
                    const axi_tb::PlatformSpec &spec) {
@@ -287,26 +339,12 @@ int run_simulation(int argc, char **argv, const Options &options,
 #endif
 
   std::signal(SIGINT, handle_interrupt);
-  if (options.stats) std::signal(SIGTERM, handle_interrupt);
+  if (options.stats) {
+    std::signal(SIGTERM, handle_interrupt);
+  }
   std::uint64_t active_cycles = 0;
   std::uint64_t total_cycles = 0;
-  struct ReadStats {
-    std::uint64_t requests = 0;
-    std::uint64_t bytes_requested = 0;
-    std::uint64_t beats_received = 0;
-  };
-  std::array<ReadStats, axi_tb::config::NUM_PORTS> read_stats{};
-  const auto print_stats = [&] {
-    if (!options.stats) return;
-    std::cerr << "SIM_STATS active_cycles=" << active_cycles << '\n';
-    for (std::size_t port = 0; port < read_stats.size(); ++port) {
-      const auto &stats = read_stats[port];
-      std::cerr << "AXI_STATS port=" << port
-                << " read_requests=" << stats.requests
-                << " read_bytes_requested=" << stats.bytes_requested
-                << " read_beats_received=" << stats.beats_received << '\n';
-    }
-  };
+  ReadStatistics<axi_tb::config::NUM_PORTS> read_stats(options.stats);
   try {
     while (active_cycles < options.max_cycles && interrupted == 0 &&
            !context.gotFinish()) {
@@ -319,19 +357,7 @@ int run_simulation(int argc, char **argv, const Options &options,
       Binding::drive(top, responses);
       evaluate(context, top, trace_pointer);
       const auto sampled = Binding::sample(top);
-      if (options.stats && !reset) {
-        for (std::size_t port = 0; port < read_stats.size(); ++port) {
-          const auto &master = sampled[port];
-          const auto &slave = responses[port];
-          auto &stats = read_stats[port];
-          if (master.ar_valid && slave.ar_ready) {
-            ++stats.requests;
-            stats.bytes_requested += (std::uint64_t{master.ar.length} + 1)
-                                     << master.ar.size;
-          }
-          if (master.r_ready && slave.r_valid) ++stats.beats_received;
-        }
-      }
+      read_stats.sample(sampled, responses, reset);
       top.clk = 1;
       evaluate(context, top, trace_pointer);
       fabric.commit(sampled, reset);
@@ -345,7 +371,7 @@ int run_simulation(int argc, char **argv, const Options &options,
         std::cerr << "[axi-tb] guest exit code " << guest_code << " (0x"
                   << std::hex << guest_code << std::dec << ") after "
                   << active_cycles << " cycle(s)\n";
-        print_stats();
+        read_stats.print(active_cycles);
         top.final();
         if (trace_pointer != nullptr) {
           trace_pointer->close();
@@ -365,7 +391,7 @@ int run_simulation(int argc, char **argv, const Options &options,
     throw;
   }
 
-  print_stats();
+  read_stats.print(active_cycles);
   if (interrupted != 0) {
     std::cerr << "[axi-tb] interrupted after " << active_cycles
               << " active cycle(s)\n";

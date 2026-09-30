@@ -109,6 +109,7 @@ axi_tb_add_riscv_software(
 add_dependencies(fuxi_sim fuxi_software)
 if(AXI_TB_FUXI_WITH_BENCHMARKS)
   add_subdirectory(benchmarks)
+  add_dependencies(fuxi_sim fuxi_benchmarks)
 endif()
 
 # A real raw ROM boot stub jumping into a separately loaded RAM-only ELF.
