@@ -96,3 +96,79 @@ remain identical. This prevents code compression from moving constants into
 different direct-mapped D-cache sets. It does not eliminate changed branch
 predictor aliasing or the intended I-cache/code-layout effects. Keep these
 results separate from the natural-layout primary comparison.
+
+## Frozen Fuxi PMU measurements
+
+`AXI_TB_FUXI_BENCHMARK_PMU=ON` adds six `*-pmu-GROUP.elf` images per
+benchmark/ISA variant. The option defaults to OFF: the original four images
+still run on Fuxi versions that only implement cycle/instret. The added images
+require Fuxi's PMU v1 event ABI and at least eight HPM counters (`mhpmcounter3`
+through `mhpmcounter10`). The guest checks inhibit-mask and selector readback;
+absent slots or unsupported selectors fail with guest exit code 5 (the
+simulator process returns 1). Unsupported CSR
+access traps also fail the run explicitly.
+
+```sh
+cmake --preset fuxi \
+  -DAXI_TB_FUXI_SOURCE_DIR=/path/to/Fuxi-with-pmu \
+  -DAXI_TB_FUXI_WITH_BENCHMARKS=ON -DAXI_TB_FUXI_BENCHMARK_PMU=ON
+cmake --build build/fuxi --target fuxi_sim fuxi_benchmarks -j
+ctest --test-dir build/fuxi -L '^pmu$' --output-on-failure
+python3 examples/fuxi/benchmarks/run.py \
+  --simulator build/fuxi/examples/fuxi/fuxi_sim \
+  --elf build/fuxi/examples/fuxi/benchmarks/coremark-rv32imac-pmu-ras.elf \
+  --pmu-group 2 --output debug/coremark-rv32imac-pmu-ras.json
+```
+
+Each group starts a fresh simulator and executes the original deterministic
+benchmark. `pmu.py` is the benchmark event/group definition and generates the
+guest header during CMake configuration. Its IDs match Fuxi's
+`src/main/scala/consts/PerfEvent.scala`.
+
+| Group ID / name | Event IDs in HPM3..10 | Purpose |
+|---|---|---|
+| 1 / branch | 1, 2, 3, 4, 5, 6, 7, 8 | Retired branch/JAL/JALR and prediction errors |
+| 2 / ras | 9, 10, 11, 12, 13, 14, 28, 29 | RAS coverage, accuracy, fallback and clears |
+| 3 / stalls | 18, 19, 20, 21, 22, 23, 24, 25 | Supply, pipeline stalls and redirects |
+| 4 / cache | 30, 31, 32, 35, 36, 37, 38, 15 | Cache accesses, misses, busy cycles and writebacks |
+| 5 / translation | 33, 34, 39, 40, 41, 42, 43, 44 | Page-table cache traffic, TLB misses and walk cycles |
+| 6 / mix | 15, 16, 17, 26, 27, 9, 10, 24 | Retired instruction mix and RAS diagnostics |
+
+The PMU hooks use `mcountinhibit` mask `0x7fd` to freeze cycle, instret and
+HPM3..10 together, program the event selectors and clear all ten 64-bit
+counters, then release them with one CSR write. The stop hook freezes the same
+mask before reading any counter. The measured interval starts and ends at
+these CSR writes; it includes hook returns/calls, upstream timing-hook
+bookkeeping, and the stop hook's mask-load instruction. Configuration and
+snapshot reads are excluded. No estimated overhead is subtracted. Counters
+stay frozen through validation, printing and exit; full-run AXI totals remain
+independent of this measurement interval.
+
+The setup/stop assembly uses fixed 32-bit encodings. Group selections are
+volatile data with the same size and addresses in every group, so changing
+groups does not specialize the workload's code or alter its layout. PMU and
+baseline images have different instrumentation and must be reported separately.
+Repeat runs with the same AXI probability/seed and verify cycles/instret agree
+before comparing event groups. Every ratio in JSON nevertheless uses counters
+from its own run; counters from different groups are never pooled into one
+ratio. Short runs remain normalized simulation estimates.
+
+Guest UART prints a versioned group header and eight exact hexadecimal 64-bit
+HPM values with counter numbers and event IDs. JSON includes raw decimal
+values, event names, units, counts per 1000 retired instructions, cycle-event
+fractions, and applicable branch/RAS/cache metrics. Zero denominators produce
+`null`. `--pmu-group` requires the expected complete snapshot; CTest supplies
+it for every PMU image. Parser regressions cover incomplete/duplicate output,
+64-bit values, impossible counts, group mismatches, and metric denominators.
+
+Retired instruction events exclude squashed instructions; RAS operations,
+redirects, cache traffic and stalls describe actual microarchitectural activity
+and may include speculation. Cache access counters count completed transfers,
+whereas miss counters count miss starts: a transfer can straddle an interval
+boundary, so JSON calls their ratio `misses_per_completed_access`, not an exact
+matched-request miss rate. Page-walk cache traffic has its own event IDs.
+Cache busy cycles can include maintenance; stall/busy categories overlap and
+must not be added into a CPI decomposition. See Fuxi's PMU documentation for
+precise event gates. Translation events normally remain zero for these bare
+M-mode guests. These are RTL simulation measurements; they establish neither
+FPGA timing/area nor ASIC power/performance.
