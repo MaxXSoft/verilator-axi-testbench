@@ -9,6 +9,8 @@ import re
 import subprocess
 import time
 
+from pmu import GROUPS, parse_pmu
+
 
 def validate(text, name, iterations):
     if name == "dhrystone":
@@ -43,6 +45,8 @@ def main():
     parser.add_argument("--max-cycles", type=int, default=2000000000)
     parser.add_argument("--stall-probability", type=float, default=0)
     parser.add_argument("--seed", type=int, default=12345)
+    parser.add_argument("--pmu-group", type=int, choices=GROUPS,
+                        help="Require a complete frozen snapshot of this PMU group")
     args = parser.parse_args()
     command = [str(args.simulator.resolve()), "--elf", str(args.elf.resolve()),
                "--max-cycles", str(args.max_cycles), "--stall-probability",
@@ -73,6 +77,9 @@ def main():
         "command": command, "elf_sha256": hashlib.sha256(args.elf.read_bytes()).hexdigest(),
         "simulator_sha256": hashlib.sha256(args.simulator.read_bytes()).hexdigest(),
     }
+    pmu = parse_pmu(result.stdout, cycles, instret, args.pmu_group)
+    if pmu is not None:
+        report["pmu"] = pmu
     report["full_run_axi_reads"] = [
         {"port": int(port), "requests": int(requests),
          "bytes_requested": int(size), "beats_received": int(beats)}

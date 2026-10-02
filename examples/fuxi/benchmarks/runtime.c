@@ -3,6 +3,16 @@
 #include "benchmark.h"
 #include "stdio.h"
 
+#ifdef FUXI_PMU_GROUP
+#include "pmu_groups.h"
+/* Volatile data prevents group constants from specializing code or moving its
+   layout. Every group uses identical text, addresses, and setup instructions. */
+const volatile uint32_t benchmark_pmu_events[8] = FUXI_PMU_EVENTS;
+static volatile unsigned benchmark_pmu_group = FUXI_PMU_GROUP;
+uint64_t benchmark_pmu_counters[10];
+#define elapsed_cycles benchmark_pmu_counters[0]
+#define elapsed_instructions benchmark_pmu_counters[1]
+#else
 static uint64_t start_cycles, start_instructions, elapsed_cycles,
     elapsed_instructions;
 
@@ -36,6 +46,8 @@ void benchmark_stop(void) {
   elapsed_instructions = end_instructions - start_instructions;
 }
 
+#endif
+
 uint64_t benchmark_cycles(void) { return elapsed_cycles; }
 
 void benchmark_report(const char *name, unsigned iterations) {
@@ -44,6 +56,16 @@ void benchmark_report(const char *name, unsigned iterations) {
       name, iterations, (unsigned)(elapsed_cycles >> 32),
       (unsigned)elapsed_cycles, (unsigned)(elapsed_instructions >> 32),
       (unsigned)elapsed_instructions);
+#ifdef FUXI_PMU_GROUP
+  unsigned slot;
+  printf("BENCH_PMU version=1 group=%u slots=8\n", benchmark_pmu_group);
+  for (slot = 0; slot < 8; ++slot) {
+    uint64_t value = benchmark_pmu_counters[slot + 2];
+    printf("BENCH_HPM counter=%u event=%u value=%08x%08x\n", slot + 3,
+           (unsigned)benchmark_pmu_events[slot], (unsigned)(value >> 32),
+           (unsigned)value);
+  }
+#endif
 }
 
 void benchmark_exit(unsigned code) {
