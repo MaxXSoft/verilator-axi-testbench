@@ -90,13 +90,16 @@ signals. See [the extension API](../../docs/platform.md) for other platforms.
 | ROM | `0x00000000` | `0x10000` | Reset PC `0x200` |
 | RAM | `0x80000000` | `0x08000000` | Shared by all AXI lanes |
 | ns16550a UART | `0x10000000` | `0x100` | PLIC source 10 |
-| Exit | `0x10001000` | `4` | B-handshake completion |
+| Exit | `0x10001000` | `8` | B-handshake completion |
 | CLINT | `0x11000000` | `0x10000` | MSIP, MTIP, 64-bit mtime |
 | PLIC | `0x12000000` | `0x04000000` | Context 0 M, context 1 S |
 
 CLINT and PLIC are deliberately relocated into the existing core's uncached
 window. Their register offsets follow the conventional CLINT and standard
 PLIC layouts; they do not use the FPGA SoC's AXI INTC programming model.
+The exit aperture is eight bytes to satisfy OpenSBI's minimum domain region
+size. Only its first 32-bit word is implemented; accesses to the reserved word
+return `SLVERR`. A full word write of zero exits successfully.
 The generated `fuxi_platform.h` exports the CMake-selected peripheral bases and
 UART IRQ to both the simulator platform and the assembly guests.
 

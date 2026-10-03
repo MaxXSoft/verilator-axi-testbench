@@ -17,7 +17,9 @@ set(_fuxi_ram_size 0x08000000)
 set(_fuxi_uart_base 0x10000000)
 set(_fuxi_uart_size 0x00000100)
 set(_fuxi_exit_base 0x10001000)
-set(_fuxi_exit_size 0x00000004)
+# OpenSBI domain regions require at least eight bytes. The exit register remains
+# one 32-bit word; the rest of this aperture is reserved and returns SLVERR.
+set(_fuxi_exit_size 0x00000008)
 # Keep peripherals inside this version of Fuxi's uncached [0x10000000, 0x20000000).
 get_target_property(_fuxi_platform_header axi_tb_fuxi_platform AXI_TB_PLATFORM_HEADER)
 get_filename_component(_fuxi_platform_include "${_fuxi_platform_header}" DIRECTORY)
