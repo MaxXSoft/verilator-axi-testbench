@@ -137,14 +137,12 @@ bring-up. GeeOS has a separate `fuxi_sim` target for the map above; its FPGA
 Device-tree generation, SBI firmware, storage/virtio, and processor privilege,
 MMU and CSR changes remain separate work.
 
-The current Fuxi core has a single external IRQ input, which it reflects in
-both M/S pending bits. The adapter ORs the separate PLIC M/S outputs into that
-legacy input. The new regression checks both contexts using the appropriate
-interrupt enables/delegation; this does not establish independent M/S pending
-semantics when both contexts are active. A later core upgrade can wire the
-already separate `irq_meip` and `irq_seip` inputs independently. Likewise,
-`rtc_time` carries CLINT mtime to the adapter boundary but is unused inside
-the current core: it does not implement `time/timeh` CSR behavior by itself.
+The adapter connects PLIC context 0 to Fuxi's machine external input and context
+1 to its supervisor external input. CLINT drives only machine timer/software
+pending bits; firmware forwards supervisor timer/software interrupts through
+the writable CSR pending bits. `rtc_time` carries CLINT mtime into the core's
+`time/timeh` CSRs. An external Fuxi checkout must provide the `irq_sextern` and
+`rtc_time` wrapper ports used by this adapter.
 
 ## Booting GeeOS
 
@@ -185,9 +183,11 @@ validated; the smaller target provides a faster default for development.
 
 ## Added regressions and image loading
 
-`fuxi_peripheral_irq` exercises real CLINT MSIP and MTIP interrupts, followed
-by UART loopback receive through PLIC context 0 into M-mode and context 1 into
-S-mode, with 35% AXI backpressure. Host tests additionally cover timer carry,
+`fuxi_peripheral_irq` checks CLINT-backed `time/timeh` reads in M/S modes and
+real CLINT MSIP and MTIP interrupts, followed by UART loopback receive through
+PLIC context 0 into M-mode and context 1 into S-mode. It verifies that these
+hardware sources do not assert the other privilege level's pending bits, with
+35% AXI backpressure. Host tests additionally cover timer carry,
 64-bit MMIO, PLIC arbitration, masking, gateway completion, pending retention,
 invalid accesses, reset, and connections independent of device creation order.
 
