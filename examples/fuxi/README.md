@@ -190,7 +190,9 @@ validated; the smaller target provides a faster default for development.
 real CLINT MSIP and MTIP interrupts, followed by UART loopback receive through
 PLIC context 0 into M-mode and context 1 into S-mode. It verifies that these
 hardware sources do not assert the other privilege level's pending bits, with
-35% AXI backpressure. Host tests additionally cover timer carry,
+35% AXI backpressure. Each UART handler reads IIR before RHR, matching Linux's
+8250 driver: the byte-sized status read must not consume a receive byte from
+the neighboring RHR register. Host tests additionally cover timer carry,
 64-bit MMIO, PLIC arbitration, masking, gateway completion, pending retention,
 invalid accesses, reset, and connections independent of device creation order.
 

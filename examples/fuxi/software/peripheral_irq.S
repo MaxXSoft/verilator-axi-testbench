@@ -134,6 +134,12 @@ machine_handler:
   li t2, FUXI_UART_IRQ
   bne t1, t2, fail
   li t2, AXI_TB_UART_BASE
+  /* Like Linux's 8250 handler, inspect IIR before reading RHR. A byte
+     access to IIR must not consume the neighboring receive register. */
+  lbu t3, 2(t2)
+  andi t3, t3, 0xf
+  li t4, 4
+  bne t3, t4, fail
   lbu t3, 0(t2)
   li t2, 'L'
   bne t3, t2, fail
@@ -172,6 +178,10 @@ supervisor_handler:
   li t2, FUXI_UART_IRQ
   bne t1, t2, fail
   li t2, AXI_TB_UART_BASE
+  lbu t3, 2(t2)
+  andi t3, t3, 0xf
+  li t4, 4
+  bne t3, t4, fail
   lbu t3, 0(t2)
   li t2, 'S'
   bne t3, t2, fail
