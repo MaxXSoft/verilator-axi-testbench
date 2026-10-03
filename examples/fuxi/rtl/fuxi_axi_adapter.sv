@@ -14,7 +14,7 @@ module fuxi_axi_adapter #(
   input logic irq_mtip,
   input logic irq_meip,
   input logic irq_seip,
-  // Reserved for a future core time/timeh input; current Fuxi has no such port.
+  // CLINT mtime is the architectural time/timeh clock in every privilege mode.
   input logic [63:0] rtc_time
 );
 
@@ -82,9 +82,9 @@ module fuxi_axi_adapter #(
     .rst              (~aresetn),
     .irq_timer        (irq_mtip),
     .irq_soft         (irq_soft | irq_msip),
-    // This core aliases its one external input into both M/S pending bits.
-    // Preserve separate simulator outputs for a future core interface upgrade.
-    .irq_extern       (irq_meip | irq_seip),
+    .irq_extern       (irq_meip),
+    .irq_sextern      (irq_seip),
+    .rtc_time         (rtc_time),
     .debug_wen        (),
     .debug_waddr      (),
     .debug_wdata      (),

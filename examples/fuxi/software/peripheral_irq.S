@@ -7,6 +7,21 @@ RVTEST_CODE_BEGIN
   csrw mideleg, zero
   li s0, 0
 
+  /* TIME must observe the CLINT clock, including the RV32 high half. */
+  li TESTNUM, 5
+  li t0, FUXI_CLINT_BASE + 0xbff8
+  li t1, 0x13579bdf
+  sw t1, 4(t0)
+  csrr t2, timeh
+  bne t1, t2, fail
+  csrr t1, time
+  lw t2, 0(t0)
+  bltu t2, t1, fail
+  sub t2, t2, t1
+  li t1, 1000
+  bgeu t2, t1, fail
+  sw zero, 4(t0)
+
   /* Real CLINT MSIP, with no adapter test hook. */
   li TESTNUM, 1
   li t0, 8
@@ -73,7 +88,10 @@ RVTEST_CODE_BEGIN
   sw t1, 0x80(t0)
   li t0, 0x200
   csrw mideleg, t0
-  csrw mie, t0
+  li t1, 0xa00             /* Also enable MEIE to detect a mirrored SEIP. */
+  csrw mie, t1
+  li t0, 2
+  csrw mcounteren, t0
   la t0, supervisor_entry
   csrw mepc, t0
   li t0, 0x880              /* MPP=S, MPIE=1 */
@@ -83,6 +101,11 @@ RVTEST_CODE_BEGIN
 supervisor_entry:
   la t0, supervisor_handler
   csrw stvec, t0
+  csrr t0, timeh
+  bnez t0, fail
+  csrr t0, time
+  csrr t1, time
+  bleu t1, t0, fail
   li t0, AXI_TB_UART_BASE
   li t1, 'S'
   sb t1, 0(t0)
@@ -103,6 +126,9 @@ machine_handler:
   bne t0, t1, fail
   li t0, 3
   bne TESTNUM, t0, fail
+  csrr t0, mip
+  andi t0, t0, 0x200       /* M-context IRQ must not also assert SEIP. */
+  bnez t0, fail
   li t0, FUXI_PLIC_BASE + 0x200004
   lw t1, 0(t0)
   li t2, FUXI_UART_IRQ
@@ -116,12 +142,18 @@ machine_handler:
 software_irq:
   li t0, 1
   bne TESTNUM, t0, fail
+  csrr t0, mip
+  andi t0, t0, 2           /* CLINT MSIP must not also assert SSIP. */
+  bnez t0, fail
   li t0, FUXI_CLINT_BASE
   sw zero, 0(t0)
   j machine_return
 timer_irq:
   li t0, 2
   bne TESTNUM, t0, fail
+  csrr t0, mip
+  andi t0, t0, 0x20        /* CLINT MTIP must not also assert STIP. */
+  bnez t0, fail
   li t0, FUXI_CLINT_BASE + 0x4000
   li t1, -1
   sw t1, 4(t0)
