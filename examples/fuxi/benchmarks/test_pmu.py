@@ -9,7 +9,7 @@ from pmu import GROUPS, parse_pmu
 def snapshot(group=1, values=None):
     values = values or [0] * 8
     lines = [f"BENCH_PMU version=1 group={group} slots=8"]
-    lines += [f"BENCH_HPM counter={slot} event={event} value={value:016x}"
+    lines += [f"BENCH_HPM counter={slot} event={event:d} value={value:016x}"
               for slot, event, value in zip(range(3, 11), GROUPS[group][1], values)]
     return "\n".join(lines) + "\n"
 
@@ -47,6 +47,16 @@ class SnapshotTests(unittest.TestCase):
         self.assertIsNone(result["metrics"]["icache_misses_per_completed_access"])
         self.assertEqual(result["metrics"]["dcache_mpki"], 40)
 
+    def test_mixed_hardware_categories(self):
+        # The cache measurement set includes one retired-instruction event.
+        # Cache traffic can exceed instret; its compressed count cannot.
+        result = parse_pmu(snapshot(4, [75, 20, 80, 60, 15, 70, 10, 25]), 100, 50)
+        self.assertEqual(result["counters"][0]["event_id"], 0x03000000)
+        self.assertEqual(result["counters"][7]["event_id"], 0x0100000e)
+        self.assertEqual(result["counters"][7]["event"], "compressed_retired")
+        with self.assertRaises(ValueError):
+            parse_pmu(snapshot(4, [75, 20, 80, 60, 15, 70, 10, 51]), 100, 50)
+
     def test_reject_inconsistent_partitions(self):
         for group, values in ((1, [10, 3, 1, 1, 0, 0, 0, 0]),
                               (1, [30, 0, 0, 0, 20, 0, 1, 0]),
@@ -59,7 +69,8 @@ class SnapshotTests(unittest.TestCase):
         valid = snapshot()
         for invalid in (valid + valid, "\n".join(valid.splitlines()[:-1]),
                         valid.replace("counter=4", "counter=3"),
-                        valid.replace("event=1 ", "event=2 "),
+                        valid.replace("event=16777216 ", "event=16777217 "),
+                        valid.replace("event=16777216 ", "event=1 "),
                         valid.replace("version=1", "version=2"),
                         valid.replace("group=1", "group=99"),
                         valid + "BENCH_HPM malformed\n"):

@@ -7,7 +7,7 @@ set(AXI_TB_COREMARK_ITERATIONS 10 CACHE STRING "CoreMark measured iterations")
 option(AXI_TB_FUXI_BENCHMARK_FIXED_LAYOUT
        "Also build controlled-layout benchmark guests with rodata fixed at 0x5000" OFF)
 option(AXI_TB_FUXI_BENCHMARK_PMU
-       "Also build six event-group guests requiring Fuxi PMU v1 and eight HPM counters" OFF)
+       "Also build six event-group guests requiring Fuxi grouped PMU events and eight HPM counters" OFF)
 foreach(_setting AXI_TB_DHRYSTONE_ITERATIONS AXI_TB_COREMARK_ITERATIONS)
   if(NOT "${${_setting}}" MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR "${_setting} must be a positive integer")

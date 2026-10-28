@@ -102,7 +102,7 @@ results separate from the natural-layout primary comparison.
 `AXI_TB_FUXI_BENCHMARK_PMU=ON` adds six `*-pmu-GROUP.elf` images per
 benchmark/ISA variant. The option defaults to OFF: the original four images
 still run on Fuxi versions that only implement cycle/instret. The added images
-require Fuxi's PMU v1 event ABI and at least eight HPM counters (`mhpmcounter3`
+require Fuxi's grouped PMU event encoding and at least eight HPM counters (`mhpmcounter3`
 through `mhpmcounter10`). The guest checks inhibit-mask and selector readback;
 absent slots or unsupported selectors fail with guest exit code 5 (the
 simulator process returns 1). Unsupported CSR
@@ -123,16 +123,23 @@ python3 examples/fuxi/benchmarks/run.py \
 Each group starts a fresh simulator and executes the original deterministic
 benchmark. `pmu.py` is the benchmark event/group definition and generates the
 guest header during CMake configuration. Its IDs match Fuxi's
-`src/main/scala/consts/PerfEvent.scala`.
+`src/main/scala/consts/PerfEvent.scala`: selector bits 31:24 hold the hardware
+category (1 = retired instructions, 2 = microarchitecture, 3 = cache/MMU),
+and bits 23:0 hold the zero-based event number. Zero disables counting;
+unsupported encodings read back zero. Each counter selects one event.
+The benchmark group numbers below identify measurement sets, which can span
+hardware categories; they are not hardware group IDs. The snapshot format
+remains version 1, with full encoded event IDs in its decimal `event=` fields;
+former flat event IDs are no longer accepted.
 
 | Group ID / name | Event IDs in HPM3..10 | Purpose |
 |---|---|---|
-| 1 / branch | 1, 2, 3, 4, 5, 6, 7, 8 | Retired branch/JAL/JALR and prediction errors |
-| 2 / ras | 9, 10, 11, 12, 13, 14, 28, 29 | RAS coverage, accuracy, fallback and clears |
-| 3 / stalls | 18, 19, 20, 21, 22, 23, 24, 25 | Supply, pipeline stalls and redirects |
-| 4 / cache | 30, 31, 32, 35, 36, 37, 38, 15 | Cache accesses, misses, busy cycles and writebacks |
-| 5 / translation | 33, 34, 39, 40, 41, 42, 43, 44 | Page-table cache traffic, TLB misses and walk cycles |
-| 6 / mix | 15, 16, 17, 26, 27, 9, 10, 24 | Retired instruction mix and RAS diagnostics |
+| 1 / branch | `0x01000000`, `0x01000001`, `0x01000002`, `0x01000003`, `0x01000004`, `0x01000005`, `0x01000006`, `0x01000007` | Retired branch/JAL/JALR and prediction errors |
+| 2 / ras | `0x01000008`, `0x01000009`, `0x0100000a`, `0x0100000b`, `0x0100000c`, `0x0100000d`, `0x0200000a`, `0x0200000b` | RAS coverage, accuracy, fallback and clears |
+| 3 / stalls | `0x02000000`, `0x02000001`, `0x02000002`, `0x02000003`, `0x02000004`, `0x02000005`, `0x02000006`, `0x02000007` | Supply, pipeline stalls and redirects |
+| 4 / cache | `0x03000000`, `0x03000001`, `0x03000002`, `0x03000005`, `0x03000006`, `0x03000007`, `0x03000008`, `0x0100000e` | Cache accesses, misses, busy cycles and writebacks |
+| 5 / translation | `0x03000003`, `0x03000004`, `0x03000009`, `0x0300000a`, `0x0300000b`, `0x0300000c`, `0x0300000d`, `0x0300000e` | Page-table cache traffic, TLB misses and walk cycles |
+| 6 / mix | `0x0100000e`, `0x0100000f`, `0x01000010`, `0x02000008`, `0x02000009`, `0x01000008`, `0x01000009`, `0x02000006` | Retired instruction mix and RAS diagnostics |
 
 The PMU hooks use `mcountinhibit` mask `0x7fd` to freeze cycle, instret and
 HPM3..10 together, program the event selectors and clear all ten 64-bit
