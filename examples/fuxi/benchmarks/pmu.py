@@ -188,7 +188,18 @@ def write_header(path):
     path.write_text("\n".join(text))
 
 
+def write_cmake(path):
+    text = ["# Generated from pmu.py; benchmark measurement group names and IDs.",
+            "set(FUXI_PMU_GROUP_NAMES " + " ".join(name for name, _ in GROUPS.values()) + ")"]
+    text += [f"set(FUXI_PMU_GROUP_{name} {group})" for group, (name, _) in GROUPS.items()]
+    path.write_text("\n".join(text) + "\n")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--header", type=Path, required=True)
-    write_header(parser.parse_args().header)
+    parser.add_argument("--cmake", type=Path, help="Also generate CMake group names and IDs")
+    args = parser.parse_args()
+    write_header(args.header)
+    if args.cmake:
+        write_cmake(args.cmake)
