@@ -24,10 +24,12 @@ _axi_tb_find_riscv_toolchain(_clang _lld WITH_RVC)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(_measurements baseline)
 if(AXI_TB_FUXI_BENCHMARK_PMU)
-  list(APPEND _measurements branch ras stalls cache translation mix)
   execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/pmu.py"
     --header "${CMAKE_CURRENT_BINARY_DIR}/pmu_groups.h"
+    --cmake "${CMAKE_CURRENT_BINARY_DIR}/pmu_groups.cmake"
     COMMAND_ERROR_IS_FATAL ANY)
+  include("${CMAKE_CURRENT_BINARY_DIR}/pmu_groups.cmake")
+  list(APPEND _measurements ${FUXI_PMU_GROUP_NAMES})
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
                "${CMAKE_CURRENT_SOURCE_DIR}/pmu.py")
 endif()
@@ -79,7 +81,7 @@ foreach(_variant IN LISTS _variants)
     set(_pmu_arguments)
     set(_pmu_label)
     if(NOT _measurement STREQUAL "baseline")
-      list(FIND _measurements "${_measurement}" _group)
+      set(_group "${FUXI_PMU_GROUP_${_measurement}}")
       set(_suffix "-pmu-${_measurement}")
       set(_pmu_definitions "-DFUXI_PMU_GROUP=${_group}")
       set(_pmu_sources pmu.S)
