@@ -19,8 +19,8 @@ an external checkout selected with `AXI_TB_FUXI_SOURCE_DIR` must also support
 C to run the IMAC images. Benchmark tool discovery validates an IMAC link
 including a compressed instruction, even when the upstream ISA suite is off.
 The benchmark suite is opt-in to keep its extra dependencies and runtime out
-of the default Fuxi build. CI enables it explicitly. Both ISA variants remain
-available for controlled comparisons.
+of the default Fuxi build. CI explicitly builds and runs both the baseline and
+PMU variants. Both ISA variants remain available for controlled comparisons.
 
 CTest label filters are regular expressions, so use anchors to select one
 ISA variant:
@@ -31,10 +31,18 @@ ctest --preset fuxi -L '^rv32ima$'
 ctest --preset fuxi -L '^rv32imac$'
 ```
 
-Without the optional fixed-layout variants below, these select all four
-images, the two IMA images, and the two IMAC images, respectively. The `rv32c`
-label selects the upstream compressed-instruction regression, which is
-included in the default Fuxi ISA suite independently of benchmarks.
+With both optional PMU and fixed-layout variants disabled, these select all
+four images, the two IMA images, and the two IMAC images, respectively. These
+labels also include any enabled PMU and fixed-layout variants. To select
+baseline or PMU measurements across the enabled layouts, use:
+
+```sh
+ctest --preset fuxi -L '^benchmark$' -LE '^pmu$'
+ctest --preset fuxi -L '^pmu$'
+```
+
+The `rv32c` label selects the upstream compressed-instruction regression, which
+is included in the default Fuxi ISA suite independently of benchmarks.
 
 Both ISA variants use the same Clang and `-O3 -ffreestanding -fno-builtin
 -fno-common -fno-pic -falign-functions=4 -ffunction-sections -fdata-sections`,
@@ -108,6 +116,10 @@ absent slots or unsupported selectors fail with guest exit code 5 (the
 simulator process returns 1). Unsupported CSR
 access traps also fail the run explicitly.
 
+With natural layout only, enabling PMU adds 24 images to the four baseline
+images, for 28 total. Enabling fixed-layout variants as well doubles these
+counts to 48 PMU and eight baseline images, for 56 total.
+
 ```sh
 cmake --preset fuxi \
   -DAXI_TB_FUXI_SOURCE_DIR=/path/to/Fuxi-with-pmu \
@@ -121,8 +133,9 @@ python3 examples/fuxi/benchmarks/run.py \
 ```
 
 Each group starts a fresh simulator and executes the original deterministic
-benchmark. `pmu.py` is the benchmark event/group definition and generates the
-guest header during CMake configuration. Its IDs match Fuxi's
+benchmark. `pmu.py` is the benchmark event/group definition and generates both
+the guest header and CMake's group-name-to-ID mapping during configuration.
+Its event IDs match Fuxi's
 `src/main/scala/consts/PerfEvent.scala`: selector bits 31:24 hold the hardware
 category (1 = retired instructions, 2 = microarchitecture, 3 = cache/MMU),
 and bits 23:0 hold the zero-based event number. Zero disables counting;
