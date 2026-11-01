@@ -6,7 +6,8 @@
 #ifdef FUXI_PMU_GROUP
 #include "pmu_groups.h"
 /* Volatile data prevents group constants from specializing code or moving its
-   layout. Every group uses identical text, addresses, and setup instructions. */
+   layout. Every group uses identical text, addresses, and setup instructions.
+ */
 const volatile uint32_t benchmark_pmu_events[8] = FUXI_PMU_EVENTS;
 static volatile unsigned benchmark_pmu_group = FUXI_PMU_GROUP;
 uint64_t benchmark_pmu_counters[10];
