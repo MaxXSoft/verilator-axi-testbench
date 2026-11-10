@@ -6,7 +6,7 @@ endif()
 
 project(
   verilator-axi-testbench
-  VERSION 0.1.0
+  VERSION 0.0.3
   DESCRIPTION "A reusable AXI4 testbench for Verilated initiators"
   LANGUAGES CXX
 )

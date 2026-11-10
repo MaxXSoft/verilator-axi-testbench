@@ -2,7 +2,7 @@
 
 All notable changes to the verilator-axi-testbench will be documented in this file.
 
-## Unreleased
+## 0.0.3 - 2026-11-10
 
 ### Added
 
